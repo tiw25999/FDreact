@@ -36,7 +36,7 @@ body::after {
     transition: box-shadow .2s ease, transform .2s ease;
 }
 .card-themed:hover { box-shadow: 0 14px 36px rgba(37,99,235,0.14); transform: translateY(-2px); }
-.btn-primary { @apply bg-primary text-white hover:bg-blue-700 active:scale-[0.99] transition; }
+.btn-primary { @apply bg-blue-600 text-white hover:bg-blue-800 active:scale-[0.99] transition; }
 
 /* Custom dropdown styling for rounded options */
 select option {
