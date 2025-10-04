@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useAuthStore } from '../store/auth';
+import { useAdminStore } from '../store/admin';
 import { Navigate } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 import CustomSelect from '../components/CustomSelect';
@@ -7,6 +8,13 @@ import CustomSelect from '../components/CustomSelect';
 export default function AdminUsers() {
     const { user } = useAuthStore();
     if (!user || user.role !== 'admin') return <Navigate to="/" replace />;
+    
+    const { users, loading, fetchUsers, createUser, updateUser, deleteUser } = useAdminStore();
+    
+    // Fetch users when component mounts
+    useEffect(() => {
+        fetchUsers();
+    }, [fetchUsers]);
     
     const [searchQuery, setSearchQuery] = useState('');
     const [roleFilter, setRoleFilter] = useState<string>('all');
@@ -20,107 +28,84 @@ export default function AdminUsers() {
         lastName: '',
         email: '',
         phone: '',
+        password: '',
         role: 'user'
     });
 
-    // Get all users from localStorage (simplified - in real app would be from API)
-    const getAllUsers = () => {
-        try {
-            const profiles = localStorage.getItem('etech_profiles');
-            const currentUserRaw = localStorage.getItem('etech_user');
-            const currentUser = currentUserRaw ? JSON.parse(currentUserRaw) : null;
-            if (!profiles) return [];
-            const profilesData = JSON.parse(profiles);
-            return Object.entries(profilesData).map(([email, profile]: [string, any]) => {
-                const role = profile.role || (currentUser && currentUser.email === email ? currentUser.role : 'user');
-                return {
-                email,
-                firstName: profile.firstName || '',
-                lastName: profile.lastName || '',
-                phone: profile.phone || '',
-                role,
-                avatarUrl: profile.avatarUrl || '',
-                addresses: profile.addresses || [],
-                lastLogin: profile.lastLogin || new Date().toISOString(),
-            };
-            });
-        } catch {
-            return [];
-        }
-    };
+    // Use users from API - no need for localStorage
 
-    const allUsers = useMemo(() => getAllUsers(), [refreshKey]);
+    const allUsers = users;
 
     const filteredUsers = allUsers
         .filter(user => {
             const matchesSearch = user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                                user.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                                user.lastName.toLowerCase().includes(searchQuery.toLowerCase());
+                                user.first_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                user.last_name.toLowerCase().includes(searchQuery.toLowerCase());
             const matchesRole = roleFilter === 'all' || user.role === roleFilter;
             return matchesSearch && matchesRole;
         })
         .sort((a, b) => {
             switch (sortBy) {
                 case 'newest':
-                    return new Date(b.lastLogin).getTime() - new Date(a.lastLogin).getTime();
+                    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
                 case 'oldest':
-                    return new Date(a.lastLogin).getTime() - new Date(b.lastLogin).getTime();
+                    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
                 case 'name-a':
-                    return `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
+                    return `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`);
                 case 'name-z':
-                    return `${b.firstName} ${b.lastName}`.localeCompare(`${a.firstName} ${a.lastName}`);
+                    return `${b.first_name} ${b.last_name}`.localeCompare(`${a.first_name} ${a.last_name}`);
                 default:
                     return 0;
             }
         });
 
-    const handleRoleUpdate = (email: string, newRole: string) => {
+    const handleRoleUpdate = async (userId: string, newRole: string) => {
         try {
-            const profiles = localStorage.getItem('etech_profiles');
-            if (!profiles) return;
-            const profilesData = JSON.parse(profiles);
-            if (profilesData[email]) {
-                profilesData[email].role = newRole;
-                localStorage.setItem('etech_profiles', JSON.stringify(profilesData));
-                
-                // Also update current user if it's the same email
-                const currentUserRaw = localStorage.getItem('etech_user');
-                if (currentUserRaw) {
-                    const currentUser = JSON.parse(currentUserRaw);
-                    if (currentUser.email === email) {
-                        currentUser.role = newRole;
-                        localStorage.setItem('etech_user', JSON.stringify(currentUser));
-                    }
-                }
-                
-                setRefreshKey(prev => prev + 1);
-            }
-        } catch (error) {
+            // Find the user to get their current data
+            const user = users.find(u => u.id === userId);
+            if (!user) return;
+
+            await updateUser(userId, {
+                first_name: user.first_name,
+                last_name: user.last_name,
+                email: user.email,
+                phone: user.phone || '',
+                role: newRole
+            });
+        } catch (error: any) {
             console.error('Error updating user role:', error);
+            alert(error.response?.data?.error || 'Failed to update user role');
         }
     };
 
-    const handleAddUser = () => {
+    const handleAddUser = async () => {
+        // Validate required fields
+        if (!newUser.firstName || !newUser.lastName || !newUser.email || !newUser.password) {
+            alert('Please fill in all required fields');
+            return;
+        }
+
+        // Validate password length
+        if (newUser.password.length < 6) {
+            alert('Password must be at least 6 characters long');
+            return;
+        }
+
         try {
-            const profiles = localStorage.getItem('etech_profiles');
-            const profilesData = profiles ? JSON.parse(profiles) : {};
-            
-            profilesData[newUser.email] = {
-                firstName: newUser.firstName,
-                lastName: newUser.lastName,
+            await createUser({
+                first_name: newUser.firstName,
+                last_name: newUser.lastName,
+                email: newUser.email,
                 phone: newUser.phone,
-                role: newUser.role,
-                addresses: [],
-                avatarUrl: '',
-                lastLogin: new Date().toISOString()
-            };
+                password: newUser.password,
+                role: newUser.role
+            });
             
-            localStorage.setItem('etech_profiles', JSON.stringify(profilesData));
             setShowAddModal(false);
-            setNewUser({ firstName: '', lastName: '', email: '', phone: '', role: 'user' });
-            setRefreshKey(prev => prev + 1);
-        } catch (error) {
+            setNewUser({ firstName: '', lastName: '', email: '', phone: '', password: '', role: 'user' });
+        } catch (error: any) {
             console.error('Error adding user:', error);
+            alert(error.response?.data?.error || 'Failed to add user');
         }
     };
 
@@ -129,71 +114,45 @@ export default function AdminUsers() {
         setShowEditModal(true);
     };
 
-    const handleUpdateUser = () => {
+    const handleUpdateUser = async () => {
         try {
-            const profiles = localStorage.getItem('etech_profiles');
-            if (!profiles) return;
-            const profilesData = JSON.parse(profiles);
+            await updateUser(editingUser.id, {
+                first_name: editingUser.first_name,
+                last_name: editingUser.last_name,
+                email: editingUser.email,
+                phone: editingUser.phone,
+                role: editingUser.role
+            });
             
-            if (profilesData[editingUser.email]) {
-                profilesData[editingUser.email] = {
-                    ...profilesData[editingUser.email],
-                    firstName: editingUser.firstName,
-                    lastName: editingUser.lastName,
-                    phone: editingUser.phone,
-                    role: editingUser.role
-                };
-                
-                localStorage.setItem('etech_profiles', JSON.stringify(profilesData));
-                setShowEditModal(false);
-                setEditingUser(null);
-                setRefreshKey(prev => prev + 1);
-            }
-        } catch (error) {
+            setShowEditModal(false);
+            setEditingUser(null);
+        } catch (error: any) {
             console.error('Error updating user:', error);
+            alert(error.response?.data?.error || 'Failed to update user');
         }
     };
 
-    const handleDeleteUser = (email: string) => {
+    const handleDeleteUser = async (userId: string) => {
         if (window.confirm('Are you sure you want to delete this user?')) {
             try {
-                const profiles = localStorage.getItem('etech_profiles');
-                if (!profiles) return;
-                const profilesData = JSON.parse(profiles);
-                
-                // Check if this is the last admin
-                const adminCount = Object.values(profilesData).filter((p: any) => p.role === 'admin').length;
-                if (profilesData[email]?.role === 'admin' && adminCount <= 1) {
-                    alert('Cannot delete the last admin user!');
-                    return;
-                }
-                
-                // Delete from profiles
-                delete profilesData[email];
-                localStorage.setItem('etech_profiles', JSON.stringify(profilesData));
-                
-                // Also remove user's orders and cart data
-                localStorage.removeItem(`etech_orders_${email}`);
-                localStorage.removeItem(`etech_cart_${email}`);
-                
-                // If this is the current user, log them out
-                const currentUserRaw = localStorage.getItem('etech_user');
-                if (currentUserRaw) {
-                    const currentUser = JSON.parse(currentUserRaw);
-                    if (currentUser.email === email) {
-                        localStorage.removeItem('etech_user');
-                        // Redirect to login
-                        window.location.href = '/login';
-                        return;
-                    }
-                }
-                
-                setRefreshKey(prev => prev + 1);
-            } catch (error) {
+                await deleteUser(userId);
+            } catch (error: any) {
                 console.error('Error deleting user:', error);
+                alert(error.response?.data?.error || 'Failed to delete user');
             }
         }
     };
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white flex items-center justify-center">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-4 text-gray-600">Loading users...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="mx-auto max-w-7xl p-4 space-y-6">
@@ -279,6 +238,7 @@ export default function AdminUsers() {
                             value={roleFilter}
                             onChange={setRoleFilter}
                             placeholder="Select role..."
+                            allowCustomInput={false}
                         />
                     </div>
                     <div>
@@ -293,6 +253,7 @@ export default function AdminUsers() {
                             value={sortBy}
                             onChange={setSortBy}
                             placeholder="Sort by..."
+                            allowCustomInput={false}
                         />
                     </div>
                 </div>
@@ -319,17 +280,17 @@ export default function AdminUsers() {
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="flex items-center">
                                             <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
-                                                {user.avatarUrl ? (
-                                                    <img src={user.avatarUrl} className="w-full h-full object-cover" alt="" />
+                                                {user.avatar_url ? (
+                                                    <img src={user.avatar_url} className="w-full h-full object-cover" alt="" />
                                                 ) : (
                                                     <span className="text-gray-600 font-semibold">
-                                                        {user.firstName?.[0]?.toUpperCase() || user.email[0].toUpperCase()}
+                                                        {user.first_name?.[0]?.toUpperCase() || user.email[0].toUpperCase()}
                                                     </span>
                                                 )}
                                             </div>
                                             <div className="ml-4">
                                                 <div className="text-sm font-medium text-gray-900">
-                                                    {user.firstName} {user.lastName}
+                                                    {user.first_name} {user.last_name}
                                                 </div>
                                             </div>
                                         </div>
@@ -348,10 +309,10 @@ export default function AdminUsers() {
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                        {user.addresses?.length || 0} addresses
+                                        N/A
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        {new Date(user.lastLogin).toLocaleDateString()}
+                                        {new Date(user.created_at).toLocaleDateString()}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                         <div className="flex items-center gap-2">
@@ -362,14 +323,14 @@ export default function AdminUsers() {
                                                 Edit
                                             </button>
                                             <button
-                                                onClick={() => handleDeleteUser(user.email)}
+                                                onClick={() => handleDeleteUser(user.id)}
                                                 className="text-red-600 hover:text-red-700 text-xs px-2 py-1 rounded border"
                                             >
                                                 Delete
                                             </button>
                                             <select
                                                 value={user.role}
-                                                onChange={(e) => handleRoleUpdate(user.email, e.target.value)}
+                                                onChange={(e) => handleRoleUpdate(user.id, e.target.value)}
                                                 className="text-xs border rounded px-2 py-1 focus:ring-1 focus:ring-blue-300 outline-none"
                                             >
                                                 <option value="user">User</option>
@@ -393,7 +354,7 @@ export default function AdminUsers() {
 
             {/* Add User Modal */}
             {showAddModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center">
+                <div className="fixed inset-0 z-[10000] flex items-center justify-center">
                     <div className="absolute inset-0 bg-black/40" onClick={() => setShowAddModal(false)}></div>
                     <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 p-6">
                         <h3 className="text-xl font-semibold mb-4">Add New User</h3>
@@ -435,6 +396,16 @@ export default function AdminUsers() {
                                 />
                             </div>
                             <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                                <input
+                                    type="password"
+                                    value={newUser.password}
+                                    onChange={(e) => setNewUser({...newUser, password: e.target.value})}
+                                    className="w-full border rounded-full px-4 py-2 focus:ring-2 focus:ring-blue-300 outline-none"
+                                    placeholder="Enter password"
+                                />
+                            </div>
+                            <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
                                 <select
                                     value={newUser.role}
@@ -466,7 +437,7 @@ export default function AdminUsers() {
 
             {/* Edit User Modal */}
             {showEditModal && editingUser && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center">
+                <div className="fixed inset-0 z-[10000] flex items-center justify-center">
                     <div className="absolute inset-0 bg-black/40" onClick={() => setShowEditModal(false)}></div>
                     <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 p-6">
                         <h3 className="text-xl font-semibold mb-4">Edit User</h3>
@@ -475,8 +446,8 @@ export default function AdminUsers() {
                                 <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
                                 <input
                                     type="text"
-                                    value={editingUser.firstName}
-                                    onChange={(e) => setEditingUser({...editingUser, firstName: e.target.value})}
+                                    value={editingUser.first_name || ''}
+                                    onChange={(e) => setEditingUser({...editingUser, first_name: e.target.value})}
                                     className="w-full border rounded-full px-4 py-2 focus:ring-2 focus:ring-blue-300 outline-none"
                                 />
                             </div>
@@ -484,8 +455,8 @@ export default function AdminUsers() {
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
                                 <input
                                     type="text"
-                                    value={editingUser.lastName}
-                                    onChange={(e) => setEditingUser({...editingUser, lastName: e.target.value})}
+                                    value={editingUser.last_name || ''}
+                                    onChange={(e) => setEditingUser({...editingUser, last_name: e.target.value})}
                                     className="w-full border rounded-full px-4 py-2 focus:ring-2 focus:ring-blue-300 outline-none"
                                 />
                             </div>
@@ -502,7 +473,7 @@ export default function AdminUsers() {
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
                                 <input
                                     type="tel"
-                                    value={editingUser.phone}
+                                    value={editingUser.phone || ''}
                                     onChange={(e) => setEditingUser({...editingUser, phone: e.target.value})}
                                     className="w-full border rounded-full px-4 py-2 focus:ring-2 focus:ring-blue-300 outline-none"
                                 />

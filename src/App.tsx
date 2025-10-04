@@ -1,7 +1,11 @@
 import { Link, Outlet, Route, Routes } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import { ToastViewport } from './components/Toast';
+import { useAuthStore } from './store/auth';
+import { useProducts } from './store/products';
+import { useCartStore } from './store/cart';
+import { useOrdersStore } from './store/orders';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
@@ -58,6 +62,31 @@ function ShellLayout() {
 
 export default function App() {
     const [modal, setModal] = useState<{ title: string; body: string } | null>(null);
+    const { user, loadUser } = useAuthStore();
+    const { fetchProducts, products } = useProducts();
+    const { fetchCart } = useCartStore();
+    const { fetchOrders } = useOrdersStore();
+
+    // Load initial data
+    useEffect(() => {
+        // Load user if token exists
+        loadUser();
+        
+        // Load products
+        fetchProducts();
+    }, []);
+
+    // Load user-specific data when user is logged in
+    useEffect(() => {
+        if (user) {
+            fetchCart();
+            fetchOrders();
+        } else {
+            // When user logs out, clear cart and orders, but keep products
+            // Products should be available for all users (logged in or not)
+        }
+    }, [user]);
+
     // attach global openers for footer buttons after mount
     if (typeof window !== 'undefined') {
         (window as any).openPolicy = (type: 'privacy' | 'terms' | 'contact') => {

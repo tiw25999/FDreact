@@ -1,14 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useProducts } from '../store/products';
 import { useAuthStore } from '../store/auth';
 import { Navigate } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 import CustomSelect from '../components/CustomSelect';
+import { translateCategory } from '../utils/categoryTranslator';
 
 export default function ProductsAdmin() {
     const { user } = useAuthStore();
     if (!user || user.role !== 'admin') return <Navigate to="/" replace />;
-	const { products, addProduct, removeProduct, updateProduct, getCategories, getBrands } = useProducts();
+	const { products, addProduct, removeProduct, updateProduct, getCategories, getCategoriesForDisplay, getBrands, fetchProducts, loading, error } = useProducts();
 	const categories = getCategories();
 	const brands = getBrands();
 	const [open, setOpen] = useState(false);
@@ -27,10 +28,18 @@ export default function ProductsAdmin() {
 		isNew: false,
 		isSale: false
 	});
+	const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+	const [successMessage, setSuccessMessage] = useState('');
 	const [selectedProduct, setSelectedProduct] = useState(null);
 	const [editingProduct, setEditingProduct] = useState(null);
 
+	// Fetch products when component mounts
+	useEffect(() => {
+		fetchProducts();
+	}, [fetchProducts]);
+
 	const filteredProducts = products
+		.filter(p => p && p.name) // Filter out undefined/null products
 		.filter(p => {
 			const matchesSearch = p.name.toLowerCase().includes(q.toLowerCase());
 			const matchesCategory = categoryFilter === 'all' || p.category === categoryFilter;
@@ -52,31 +61,41 @@ export default function ProductsAdmin() {
 			}
 		});
 
-	const handleSubmit = () => {
+	const handleSubmit = async () => {
 		if (form.name && form.price > 0 && form.category && form.brand) {
-			addProduct({
-				name: form.name,
-				price: form.price,
-				category: form.category,
-				brand: form.brand,
-				description: form.description,
-				image: form.image,
-				rating: form.rating,
-				isNew: form.isNew,
-				isSale: form.isSale
-			});
-			setOpen(false);
-			setForm({ 
-				name: '', 
-				price: 0, 
-				category: categories[0] || '', 
-				brand: brands[0] || '',
-				description: '',
-				image: '',
-				rating: 0,
-				isNew: false,
-				isSale: false
-			});
+			try {
+				await addProduct({
+					name: form.name,
+					price: form.price,
+					category: form.category,
+					brand: form.brand,
+					description: form.description,
+					image: form.image,
+					rating: form.rating,
+					isNew: form.isNew,
+					isSale: form.isSale
+				});
+				
+				// Show success message
+				setSuccessMessage(`Product "${form.name}" added successfully!`);
+				setShowSuccessMessage(true);
+				setTimeout(() => setShowSuccessMessage(false), 3000);
+				
+				setOpen(false);
+				setForm({ 
+					name: '', 
+					price: 0, 
+					category: categories[0] || '', 
+					brand: brands[0] || '',
+					description: '',
+					image: '',
+					rating: 0,
+					isNew: false,
+					isSale: false
+				});
+			} catch (error) {
+				console.error('Failed to add product:', error);
+			}
 		}
 	};
 
@@ -86,6 +105,20 @@ export default function ProductsAdmin() {
 				<h1 className="text-3xl font-bold">Product Management</h1>
 				<Link to="/admin" className="text-blue-600 hover:text-blue-700">← Back to Dashboard</Link>
 			</div>
+
+			{/* Error Display */}
+			{error && (
+				<div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+					<strong>Error:</strong> {error}
+				</div>
+			)}
+
+			{/* Success Message */}
+			{showSuccessMessage && (
+				<div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
+					<strong>Success:</strong> {successMessage}
+				</div>
+			)}
 
 			{/* Stats Cards */}
 			<div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -147,7 +180,7 @@ export default function ProductsAdmin() {
 			</div>
 
 			{/* Filters and Search */}
-			<div className="card-themed p-6 rounded-2xl">
+			<div className="card-themed p-6 rounded-2xl relative z-20">
 				<div className="grid grid-cols-1 md:grid-cols-4 gap-4">
 					<div>
 						<label className="block text-sm font-medium text-gray-700 mb-2">Search Products</label>
@@ -166,14 +199,13 @@ export default function ProductsAdmin() {
 								{ value: "all", label: "All Categories" },
 								...categories.map(c => ({
 									value: c,
-									label: c === 'มือถือ' ? 'Mobile' : 
-										   c === 'แล็ปท็อป' ? 'Laptop' : 
-										   c === 'อุปกรณ์เสริม' ? 'Accessories' : c
+									label: translateCategory(c)
 								}))
 							]}
 							value={categoryFilter}
 							onChange={setCategoryFilter}
 							placeholder="Select category..."
+							allowCustomInput={false}
 						/>
 					</div>
 					<div>
@@ -186,6 +218,7 @@ export default function ProductsAdmin() {
 							value={brandFilter}
 							onChange={setBrandFilter}
 							placeholder="Select brand..."
+							allowCustomInput={false}
 						/>
 					</div>
 					<div>
@@ -200,6 +233,7 @@ export default function ProductsAdmin() {
 							value={sortBy}
 							onChange={setSortBy}
 							placeholder="Sort by..."
+							allowCustomInput={false}
 						/>
 					</div>
 				</div>
@@ -216,16 +250,26 @@ export default function ProductsAdmin() {
 			</div>
 
 			{/* Products Grid */}
-			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 relative z-0">
 				{filteredProducts.map(product => (
 					<div 
 						key={product.id} 
 						className="card-themed rounded-2xl overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
 						onClick={() => setSelectedProduct(product)}
 					>
-						<div className="h-48 bg-gray-200 flex items-center justify-center">
+						<div className="h-48 bg-gray-200 flex items-center justify-center relative">
 							{product.image ? (
-								<img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+								<img 
+									src={product.image} 
+									alt={product.name} 
+									className="w-full h-full object-cover" 
+									onLoad={() => {
+										// Image loaded successfully
+									}}
+									onError={() => {
+										// Image failed to load, will show placeholder
+									}}
+								/>
 							) : (
 								<div className="text-gray-400 text-center">
 									<svg className="w-12 h-12 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -242,9 +286,7 @@ export default function ProductsAdmin() {
 							</div>
 							<h3 className="font-semibold text-lg mb-1">{product.name}</h3>
 							<p className="text-sm text-gray-600 mb-2">
-								{product.brand} • {product.category === 'มือถือ' ? 'Mobile' : 
-								 product.category === 'แล็ปท็อป' ? 'Laptop' : 
-								 product.category === 'อุปกรณ์เสริม' ? 'Accessories' : product.category}
+								{product.brand} • {translateCategory(product.category)}
 							</p>
 							<div className="flex items-center justify-between">
 								<span className="text-xl font-bold text-blue-600">฿{product.price.toLocaleString()}</span>
@@ -272,7 +314,7 @@ export default function ProductsAdmin() {
 
 			{/* Product Detail Modal */}
 			{selectedProduct && (
-				<div className="fixed inset-0 z-50 flex items-center justify-center">
+				<div className="fixed inset-0 z-[10000] flex items-center justify-center">
 					<div className="absolute inset-0 bg-black/40" onClick={() => setSelectedProduct(null)}></div>
 					<div className="relative bg-white rounded-2xl p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
 						<div className="flex items-center justify-between mb-6">
@@ -290,12 +332,22 @@ export default function ProductsAdmin() {
 						<div className="grid grid-cols-1 md:grid-cols-2 gap-8">
 							{/* Product Image */}
 							<div className="space-y-4">
-								<div className="aspect-square bg-gray-200 rounded-2xl overflow-hidden">
-									{selectedProduct.image ? (
+								<div className="aspect-square bg-gray-200 rounded-2xl overflow-hidden relative">
+									{loading ? (
+										<div className="w-full h-full flex items-center justify-center">
+											<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+										</div>
+									) : selectedProduct.image ? (
 										<img 
 											src={selectedProduct.image} 
 											alt={selectedProduct.name} 
 											className="w-full h-full object-cover" 
+											onLoad={() => {
+												// Image loaded successfully
+											}}
+											onError={() => {
+												// Image failed to load, will show placeholder
+											}}
 										/>
 									) : (
 										<div className="w-full h-full flex items-center justify-center text-gray-400">
@@ -330,9 +382,7 @@ export default function ProductsAdmin() {
 											{selectedProduct.brand}
 										</span>
 										<span className="bg-gray-100 text-gray-800 px-3 py-1 rounded-full text-sm font-medium">
-											{selectedProduct.category === 'มือถือ' ? 'Mobile' : 
-											 selectedProduct.category === 'แล็ปท็อป' ? 'Laptop' : 
-											 selectedProduct.category === 'อุปกรณ์เสริม' ? 'Accessories' : selectedProduct.category}
+											{translateCategory(selectedProduct.category)}
 										</span>
 									</div>
 									<div className="text-4xl font-bold text-blue-600 mb-4">
@@ -409,7 +459,7 @@ export default function ProductsAdmin() {
 
 			{/* Add Product Modal */}
 			{open && (
-				<div className="fixed inset-0 z-50 flex items-center justify-center">
+				<div className="fixed inset-0 z-[10000] flex items-center justify-center">
 					<div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)}></div>
 					<div className="relative bg-white rounded-2xl shadow-xl max-w-2xl w-full mx-4 p-6 max-h-[90vh] overflow-y-auto">
 						<h2 className="text-2xl font-bold mb-6">Add New Product</h2>
@@ -439,15 +489,11 @@ export default function ProductsAdmin() {
 								<div>
 									<label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
 									<CustomSelect
-										options={categories.map(c => ({
-											value: c,
-											label: c === 'มือถือ' ? 'Mobile' : 
-												   c === 'แล็ปท็อป' ? 'Laptop' : 
-												   c === 'อุปกรณ์เสริม' ? 'Accessories' : c
-										}))}
+										options={getCategoriesForDisplay()}
 										value={form.category}
 										onChange={(value) => setForm({...form, category: value})}
-										placeholder="Select category..."
+										placeholder="Select or type category..."
+										allowCustomInput={true}
 									/>
 								</div>
 								<div>
@@ -456,7 +502,8 @@ export default function ProductsAdmin() {
 										options={brands.map(b => ({ value: b, label: b }))}
 										value={form.brand}
 										onChange={(value) => setForm({...form, brand: value})}
-										placeholder="Select brand..."
+										placeholder="Select or type brand..."
+										allowCustomInput={true}
 									/>
 								</div>
 							</div>
@@ -522,10 +569,11 @@ export default function ProductsAdmin() {
 								Cancel
 							</button>
 							<button 
-								className="flex-1 btn-primary rounded-full px-4 py-2"
+								className="flex-1 btn-primary rounded-full px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+								disabled={loading}
 								onClick={handleSubmit}
 							>
-								Add Product
+								{loading ? 'Adding...' : 'Add Product'}
 							</button>
 						</div>
 					</div>
@@ -534,7 +582,7 @@ export default function ProductsAdmin() {
 
 			{/* Edit Product Modal */}
 			{editingProduct && (
-				<div className="fixed inset-0 z-50 flex items-center justify-center">
+				<div className="fixed inset-0 z-[10000] flex items-center justify-center">
 					<div className="absolute inset-0 bg-black/40" onClick={() => setEditingProduct(null)}></div>
 					<div className="relative bg-white rounded-2xl shadow-xl max-w-2xl w-full mx-4 p-6 max-h-[90vh] overflow-y-auto">
 						<h2 className="text-2xl font-bold mb-6">Edit Product</h2>
@@ -564,15 +612,11 @@ export default function ProductsAdmin() {
 								<div>
 									<label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
 									<CustomSelect
-										options={categories.map(c => ({
-											value: c,
-											label: c === 'มือถือ' ? 'Mobile' : 
-												   c === 'แล็ปท็อป' ? 'Laptop' : 
-												   c === 'อุปกรณ์เสริม' ? 'Accessories' : c
-										}))}
+										options={getCategoriesForDisplay()}
 										value={editingProduct.category}
 										onChange={(value) => setEditingProduct({...editingProduct, category: value})}
 										placeholder="Select category..."
+										allowCustomInput={false}
 									/>
 								</div>
 								<div>
@@ -582,6 +626,7 @@ export default function ProductsAdmin() {
 										value={editingProduct.brand}
 										onChange={(value) => setEditingProduct({...editingProduct, brand: value})}
 										placeholder="Select brand..."
+										allowCustomInput={false}
 									/>
 								</div>
 							</div>
@@ -647,13 +692,22 @@ export default function ProductsAdmin() {
 								Cancel
 							</button>
 							<button 
-								className="flex-1 btn-primary rounded-full px-4 py-2"
-								onClick={() => {
-									updateProduct(editingProduct.id, editingProduct);
-									setEditingProduct(null);
+								className="flex-1 btn-primary rounded-full px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+								disabled={loading}
+								onClick={async () => {
+									try {
+										const updatedProduct = await updateProduct(editingProduct.id, editingProduct);
+										// Update selectedProduct with the updated data
+										if (selectedProduct && selectedProduct.id === editingProduct.id) {
+											setSelectedProduct(updatedProduct);
+										}
+										setEditingProduct(null);
+									} catch (error) {
+										console.error('Failed to update product:', error);
+									}
 								}}
 							>
-								Update Product
+								{loading ? 'Updating...' : 'Update Product'}
 							</button>
 						</div>
 					</div>

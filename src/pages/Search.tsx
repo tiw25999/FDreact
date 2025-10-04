@@ -4,9 +4,10 @@ import CustomSelect from '../components/CustomSelect';
 import { useToast } from '../components/Toast';
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { getCategoryOptions, translateCategory } from '../utils/categoryTranslator';
 
 export default function Search() {
-    const { products, setQuery, getCategories, getBrands, setFilters, filters, query } = useProducts();
+    const { products, setQuery, getCategories, getCategoriesForDisplay, getBrands, setFilters, filters, query } = useProducts();
     const categories = getCategories();
     const brands = getBrands();
     const [drawer, setDrawer] = useState(false);
@@ -64,26 +65,19 @@ export default function Search() {
                         }}
                         placeholder="Sort by..."
                         className="w-48"
+                        allowCustomInput={false}
                     />
 					<button className="md:hidden bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full px-4 py-2 text-sm font-medium shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200" onClick={()=>setDrawer(true)}>Filters</button>
 				</div>
 			</div>
 
 			<div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <aside className="hidden md:block space-y-4 bg-gradient-to-br from-white to-blue-50 border border-blue-100 rounded-3xl p-6 h-max shadow-lg">
+                <aside className="hidden md:block space-y-4 bg-gradient-to-br from-white to-blue-50 border border-blue-100 rounded-3xl p-6 h-max shadow-lg relative z-20">
                     <input className="w-full border-2 border-gray-200 rounded-full px-4 py-3 text-sm font-medium bg-white shadow-sm hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all duration-200" placeholder="Search products..." defaultValue={params.get('q')||''} onChange={e=>{ const p = Object.fromEntries(params.entries()); setQuery(e.target.value); setParams({ ...p, q: e.target.value }); }} />
 					<div>
 						<div className="font-semibold text-gray-700 mb-2 text-sm">Category</div>
                         <CustomSelect
-                            options={[
-                                { value: "", label: "All Categories" },
-                                ...categories.map(c => ({
-                                    value: c,
-                                    label: c === 'มือถือ' ? 'Mobile' : 
-                                           c === 'แล็ปท็อป' ? 'Laptop' : 
-                                           c === 'อุปกรณ์เสริม' ? 'Accessories' : c
-                                }))
-                            ]}
+                            options={getCategoriesForDisplay()}
                             value={filters.category || ''}
                             onChange={(value) => {
                                 const p = Object.fromEntries(params.entries());
@@ -91,6 +85,7 @@ export default function Search() {
                                 setParams({ ...p, category: value });
                             }}
                             placeholder="Select category..."
+                            allowCustomInput={false}
                         />
 					</div>
 					<div>
@@ -107,6 +102,7 @@ export default function Search() {
                                 setParams({ ...p, brand: value });
                             }}
                             placeholder="Select brand..."
+                            allowCustomInput={false}
                         />
 					</div>
 					<div className="grid grid-cols-2 gap-3">
@@ -116,7 +112,7 @@ export default function Search() {
 				</aside>
 
                 <section className="md:col-span-3">
-                    <div className="grid grid-cols-12 gap-6">
+                    <div className="grid grid-cols-12 gap-6 relative z-0">
                         {view.map(p => (
                             <div key={p.id} className="col-span-6 sm:col-span-4 md:col-span-3 lg:col-span-3 2xl:col-span-2" onClick={()=>push(`Selected ${p.name}`)}>
                                 <ProductCard product={p} />
@@ -128,7 +124,7 @@ export default function Search() {
 
 			{/* Mobile Drawer */}
 			{drawer && (
-				<div className="fixed inset-0 z-50 md:hidden">
+				<div className="fixed inset-0 z-[10000] md:hidden">
 					<div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={()=>setDrawer(false)}></div>
 					<div className="absolute top-0 right-0 h-full w-80 bg-gradient-to-br from-white to-blue-50 p-6 space-y-4 shadow-2xl">
 						<div className="flex items-center justify-between">
@@ -147,14 +143,13 @@ export default function Search() {
 									{ value: "", label: "All Categories" },
 									...categories.map(c => ({
 										value: c,
-										label: c === 'มือถือ' ? 'Mobile' : 
-											   c === 'แล็ปท็อป' ? 'Laptop' : 
-											   c === 'อุปกรณ์เสริม' ? 'Accessories' : c
+										label: translateCategory(c)
 									}))
 								]}
 								value={filters.category || ''}
 								onChange={(value) => setFilters({ category: value || undefined })}
 								placeholder="Select category..."
+								allowCustomInput={false}
 							/>
 						</div>
 						<div>
@@ -167,6 +162,7 @@ export default function Search() {
 								value={filters.brand || ''}
 								onChange={(value) => setFilters({ brand: value || undefined })}
 								placeholder="Select brand..."
+								allowCustomInput={false}
 							/>
 						</div>
 						<div className="grid grid-cols-2 gap-3">

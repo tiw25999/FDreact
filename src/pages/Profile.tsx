@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/auth';
 
 export default function Profile() {
-  const { user, login } = useAuthStore();
+  const { user, updateUser } = useAuthStore();
   const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
   const [firstName, setFirstName] = useState(user?.firstName || '');
@@ -27,45 +27,53 @@ export default function Profile() {
     reader.readAsDataURL(file);
   }
 
-  function onSave() {
-    if (!user) return;
-    const updated = {
-      id: user.id,
-      firstName,
-      lastName,
-      email,
-      phone,
-      avatarUrl,
-      role: user.role,
-      addresses: (user.addresses || []).map(a => ({ ...a, firstName, lastName })),
-    } as any;
-    
-    // Update both current user and profiles map
-    login(updated);
-    
-    // Also update profiles map directly to ensure persistence
-    try {
-      const profiles = localStorage.getItem('etech_profiles');
-      if (profiles) {
-        const profilesData = JSON.parse(profiles);
-        if (profilesData[user.email]) {
-          profilesData[user.email] = {
-            firstName: updated.firstName,
-            lastName: updated.lastName,
-            phone: updated.phone,
-            avatarUrl: updated.avatarUrl,
-            addresses: updated.addresses,
-            defaultAddressIndex: user.defaultAddressIndex,
-            role: updated.role,
-          };
-          localStorage.setItem('etech_profiles', JSON.stringify(profilesData));
-        }
-      }
-    } catch (error) {
-      console.error('Error updating profiles:', error);
+  async function onSave() {
+    if (!user) {
+      console.log('Profile onSave - no user found');
+      return;
     }
     
-    navigate('/');
+    console.log('Profile onSave - starting update with data:', {
+      firstName,
+      lastName,
+      phone,
+      avatarUrl: avatarUrl ? 'Base64 data present' : 'No avatar data'
+    });
+    
+    try {
+      // Update user profile via API
+      console.log('Profile onSave - calling updateUser API');
+      await updateUser({
+        firstName,
+        lastName,
+        phone: phone || undefined,
+        avatarUrl: avatarUrl || undefined,
+      });
+      
+      console.log('Profile onSave - updateUser API call successful');
+      
+      // Update addresses with new name
+      if (user.addresses && user.addresses.length > 0) {
+        const updatedAddresses = user.addresses.map(a => ({ 
+          ...a, 
+          firstName, 
+          lastName 
+        }));
+        
+        // Update addresses in localStorage
+        const profiles = JSON.parse(localStorage.getItem('etech_profiles') || '{}');
+        if (profiles[user.email]) {
+          profiles[user.email].addresses = updatedAddresses;
+          localStorage.setItem('etech_profiles', JSON.stringify(profiles));
+        }
+      }
+      
+      console.log('Profile onSave - navigation to home');
+      navigate('/');
+    } catch (error) {
+      console.error('Profile onSave - Failed to update profile:', error);
+      alert('Failed to update profile. Please try again.');
+    }
   }
 
   return (

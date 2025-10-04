@@ -41,7 +41,6 @@ export default function Checkout() {
         const orderId = addOrder(items, subtotal, address, payment, vat, shipping);
 		clear();
 		navigate('/orders');
-		console.log('Order created', orderId);
 	}
 
 	return (

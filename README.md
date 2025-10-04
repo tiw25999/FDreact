@@ -175,6 +175,7 @@ src/
 ### **ตัวแปรสภาพแวดล้อม**
 สร้างไฟล์ `.env` ในไดเรกทอรีรูท:
 ```env
+VITE_API_BASE_URL=https://bdnode.onrender.com/api
 VITE_APP_NAME=E-Tech Store
 VITE_APP_VERSION=1.0.0
 ```

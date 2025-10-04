@@ -1,21 +1,15 @@
 import { Link } from 'react-router-dom';
 import { useProducts } from '../store/products';
+import { translateCategory } from '../utils/categoryTranslator';
 
 export default function CategoryChips() {
 	const { getCategories } = useProducts();
 	const categories = getCategories();
 	
-	// Map Thai categories to English
-	const categoryMap: { [key: string]: string } = {
-		'มือถือ': 'Mobile',
-		'แล็ปท็อป': 'Laptop', 
-		'อุปกรณ์เสริม': 'Accessories'
-	};
-	
 	// All categories including "All"
 	const allCategories = [
 		{ thai: '', english: 'All' },
-		...categories.map(c => ({ thai: c, english: categoryMap[c] || c }))
+		...categories.map(c => ({ thai: c, english: translateCategory(c) }))
 	];
 	
 	return (

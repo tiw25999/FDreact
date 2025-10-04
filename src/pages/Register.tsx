@@ -10,62 +10,89 @@ export default function Register() {
     const [lastName, setLastName] = useState('');
 	const [email, setEmail] = useState('');
 	const [password, setPassword] = useState('');
-	const [role, setRole] = useState<Role>('user');
+	const [phone, setPhone] = useState('');
+	const [isLoading, setIsLoading] = useState(false);
+	const [error, setError] = useState('');
 	const navigate = useNavigate();
-	const login = useAuthStore(s=>s.login);
+	const { register, loading, error: authError } = useAuthStore();
 	const [searchParams] = useSearchParams();
 	const redirectTo = searchParams.get('redirect') || '/';
 
-    function onSubmit(e: React.FormEvent) {
+    async function onSubmit(e: React.FormEvent) {
 		e.preventDefault();
+		setIsLoading(true);
+		setError('');
 		
-		// Create user ID
-		const userId = crypto.randomUUID();
+		const success = await register({
+			firstName,
+			lastName,
+			email,
+			password,
+			phone: phone || undefined
+		});
 		
-		// Save profile data to localStorage
-		try {
-			const profiles = localStorage.getItem('etech_profiles');
-			const profilesData = profiles ? JSON.parse(profiles) : {};
-			
-			profilesData[email] = {
-				firstName,
-				lastName,
-				phone: '',
-				role,
-				addresses: [],
-				avatarUrl: '',
-				lastLogin: new Date().toISOString()
-			};
-			
-			localStorage.setItem('etech_profiles', JSON.stringify(profilesData));
-		} catch (error) {
-			console.error('Error saving profile:', error);
+		if (success) {
+			navigate(redirectTo);
+		} else {
+			setError(authError || 'Registration failed');
 		}
-		
-		// Auto login after registration
-        login({ id: userId, firstName, lastName, email, role });
-		navigate(redirectTo);
+		setIsLoading(false);
 	}
 
     return (
         <AuthLayout title="Create account">
             <form onSubmit={onSubmit} className="space-y-4">
+				{error && (
+					<div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+						{error}
+					</div>
+				)}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <input className="w-full border rounded-full px-4 py-3" placeholder="First name" value={firstName} onChange={e=>setFirstName(e.target.value)} />
-                    <input className="w-full border rounded-full px-4 py-3" placeholder="Last name" value={lastName} onChange={e=>setLastName(e.target.value)} />
+                    <input 
+						className="w-full border rounded-full px-4 py-3" 
+						placeholder="First name" 
+						value={firstName} 
+						onChange={e=>setFirstName(e.target.value)} 
+						required
+					/>
+                    <input 
+						className="w-full border rounded-full px-4 py-3" 
+						placeholder="Last name" 
+						value={lastName} 
+						onChange={e=>setLastName(e.target.value)} 
+						required
+					/>
                 </div>
-                <input className="w-full border rounded-full px-4 py-3" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} />
-                <input className="w-full border rounded-full px-4 py-3" placeholder="Password" type="password" value={password} onChange={e=>setPassword(e.target.value)} />
-                <CustomSelect
-                    options={[
-                        { value: "user", label: "User" },
-                        { value: "admin", label: "Admin" }
-                    ]}
-                    value={role}
-                    onChange={(value) => setRole(value as Role)}
-                    placeholder="Select role..."
-                />
-                <button className="w-full rounded-full px-4 py-3 bg-blue-600 text-white">Sign up</button>
+                <input 
+					className="w-full border rounded-full px-4 py-3" 
+					placeholder="Email" 
+					type="email"
+					value={email} 
+					onChange={e=>setEmail(e.target.value)} 
+					required
+				/>
+                <input 
+					className="w-full border rounded-full px-4 py-3" 
+					placeholder="Password" 
+					type="password" 
+					value={password} 
+					onChange={e=>setPassword(e.target.value)} 
+					required
+					minLength={6}
+				/>
+				<input 
+					className="w-full border rounded-full px-4 py-3" 
+					placeholder="Phone (optional)" 
+					type="tel"
+					value={phone} 
+					onChange={e=>setPhone(e.target.value)} 
+				/>
+                <button 
+					className="w-full rounded-full px-4 py-3 bg-blue-600 text-white disabled:opacity-50" 
+					disabled={isLoading || loading}
+				>
+					{isLoading || loading ? 'Creating account...' : 'Sign up'}
+				</button>
             </form>
             <p className="text-sm mt-4 text-center text-gray-600">Already have an account? <Link to={`/login${redirectTo !== '/' ? `?redirect=${encodeURIComponent(redirectTo)}` : ''}`} className="text-blue-700 underline">Sign in</Link></p>
         </AuthLayout>

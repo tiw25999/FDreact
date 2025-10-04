@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { CartItem } from './cart';
+import apiClient from '../utils/apiClient';
 
 export type Address = {
     firstName: string;
@@ -29,6 +30,9 @@ export type Order = {
 
 type OrdersState = {
 	orders: Order[];
+	loading: boolean;
+	error: string | null;
+	fetchOrders: () => Promise<void>;
     addOrder: (
         items: CartItem[],
         subtotal: number,
@@ -36,46 +40,88 @@ type OrdersState = {
         payment: PaymentMethod,
         vat: number,
         shipping: number
-    ) => string;
-    updateOrderStatus: (orderId: string, status: Order['status']) => void;
+    ) => Promise<string | null>;
+    updateOrderStatus: (orderId: string, status: Order['status']) => Promise<void>;
     reloadForUser: (email: string | null) => void;
 };
 
-const BASE_KEY = 'etech_orders';
-const USER_KEY = 'etech_user';
-const keyFor = (email: string | null) => `${BASE_KEY}_${email || 'guest'}`;
-function getCurrentEmail(): string | null {
-    try { const raw = localStorage.getItem(USER_KEY); return raw ? (JSON.parse(raw)?.email ?? null) : null; } catch { return null; }
-}
-function loadFor(email: string | null): Order[] {
-    try { const raw = localStorage.getItem(keyFor(email)); return raw ? JSON.parse(raw) : []; } catch { return []; }
-}
-function persistFor(email: string | null, orders: Order[]) { try { localStorage.setItem(keyFor(email), JSON.stringify(orders)); } catch {} }
+// Removed localStorage functions - now using API only
 
 export const useOrdersStore = create<OrdersState>((set, get) => ({
-	orders: loadFor(getCurrentEmail()),
-    addOrder: (items, subtotal, address, payment, vat, shipping) => {
-		// Generate unique ID using timestamp and random number
-		const timestamp = Date.now().toString().slice(-6);
-		const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-		const id = `${timestamp}${random}`;
-        const grandTotal = subtotal + vat + shipping;
-        const order: Order = { id, items, subtotal, vat, shipping, grandTotal, createdAt: new Date().toISOString(), status: 'Pending', address, payment };
-		set(state => {
-            const updated = [order, ...state.orders];
-            persistFor(getCurrentEmail(), updated);
-            return { orders: updated };
-        });
-		return id;
+	orders: [],
+	loading: false,
+	error: null,
+	fetchOrders: async () => {
+		set({ loading: true, error: null });
+		try {
+			const response = await apiClient.get('/orders');
+			const { data } = response.data;
+			set({ orders: data, loading: false });
+		} catch (error) {
+			set({ error: 'Failed to fetch orders', loading: false });
+		}
 	},
-    updateOrderStatus: (orderId, status) => set(state => {
-        const updated = state.orders.map(order => 
-            order.id === orderId ? { ...order, status } : order
-        );
-        persistFor(getCurrentEmail(), updated);
-        return { orders: updated };
-    }),
-    reloadForUser: (email) => set({ orders: loadFor(email) }),
+    addOrder: async (items, subtotal, address, payment, vat, shipping) => {
+		set({ loading: true, error: null });
+		try {
+			const response = await apiClient.post('/orders', {
+				items: items.map(item => ({
+					productId: item.product.id,
+					quantity: item.quantity
+				})),
+				subtotal,
+				address,
+				paymentMethod: payment,
+				vat,
+				shipping
+			});
+			
+			const { data } = response.data;
+			
+			// Transform the response data to match our Order type
+			const newOrder: Order = {
+				id: data.id,
+				items: data.items || [],
+				subtotal: data.subtotal,
+				vat: data.vat,
+				shipping: data.shipping,
+				grandTotal: data.grandTotal,
+				createdAt: data.createdAt,
+				status: data.status,
+				address: data.address,
+				payment: data.paymentMethod
+			};
+			
+			set(state => ({ orders: [newOrder, ...state.orders], loading: false }));
+			return data.id;
+		} catch (error: any) {
+			console.error('Create order failed:', error);
+			console.error('Error response:', error.response?.data);
+			console.error('Error status:', error.response?.status);
+			console.error('Request data:', { items, subtotal, address, paymentMethod: payment, vat, shipping });
+			set({ error: 'Failed to create order', loading: false });
+			return null;
+		}
+	},
+    updateOrderStatus: async (orderId, status) => {
+		set({ loading: true, error: null });
+		try {
+			await apiClient.put(`/orders/${orderId}/status`, { status });
+			set(state => ({
+				orders: state.orders.map(order => 
+					order.id === orderId ? { ...order, status } : order
+				),
+				loading: false
+			}));
+		} catch (error) {
+			console.error('Update order status failed:', error);
+			set({ error: 'Failed to update order status', loading: false });
+		}
+	},
+    reloadForUser: (email) => {
+        // No longer needed - orders are fetched from API
+        console.log('reloadForUser called but not needed with API');
+    },
 }));
 
 

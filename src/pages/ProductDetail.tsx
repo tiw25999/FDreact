@@ -1,10 +1,12 @@
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useProducts } from '../store/products';
 import { useCartStore } from '../store/cart';
 import { useState } from 'react';
+import { translateCategory } from '../utils/categoryTranslator';
 
 export default function ProductDetail() {
 	const { id } = useParams();
+	const navigate = useNavigate();
 	const product = useProducts(s => s.products.find(p => p.id === id));
 	const add = useCartStore(s => s.addItem);
 	const [quantity, setQuantity] = useState(1);
@@ -28,6 +30,13 @@ export default function ProductDetail() {
 	// Single product image
 	const productImage = product.image;
 
+	// Handle add to cart
+	const handleAddToCart = () => {
+		add(product, quantity);
+		// Navigate back to home after adding to cart
+		navigate('/');
+	};
+
 	return (
 		<div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
 			<div className="mx-auto max-w-7xl px-4 py-8">
@@ -42,9 +51,7 @@ export default function ProductDetail() {
 							to={`/search?category=${encodeURIComponent(product.category)}`} 
 							className="text-gray-900 hover:text-blue-600 transition-colors"
 						>
-							{product.category === 'มือถือ' ? 'Mobile' : 
-							 product.category === 'แล็ปท็อป' ? 'Laptop' : 
-							 product.category === 'อุปกรณ์เสริม' ? 'Accessories' : product.category}
+							{translateCategory(product.category)}
 						</Link>
 						<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -91,9 +98,7 @@ export default function ProductDetail() {
 								{product.brand}
 							</span>
 							<span className="bg-gray-100 text-gray-800 text-sm font-medium px-4 py-2 rounded-full">
-								{product.category === 'มือถือ' ? 'Mobile' : 
-								 product.category === 'แล็ปท็อป' ? 'Laptop' : 
-								 product.category === 'อุปกรณ์เสริม' ? 'Accessories' : product.category}
+								{translateCategory(product.category)}
 							</span>
 						</div>
 
@@ -158,8 +163,8 @@ export default function ProductDetail() {
 								</div>
 							</div>
 
-							<button 
-								onClick={() => add(product, quantity)}
+							<button
+								onClick={handleAddToCart}
 								className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white text-lg font-semibold py-4 px-8 rounded-full hover:from-blue-700 hover:to-blue-800 transform hover:scale-105 transition-all duration-200 shadow-xl hover:shadow-2xl"
 							>
 								Add to Cart

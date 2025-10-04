@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import apiClient from '../utils/apiClient';
+import { translateCategory } from '../utils/categoryTranslator';
 
 export type Product = {
 	id: string;
@@ -11,6 +13,7 @@ export type Product = {
 	rating: number; // 0-5
 	isNew?: boolean;
 	isSale?: boolean;
+	stockQuantity?: number;
 };
 
 type AddProductPayload = { 
@@ -27,12 +30,14 @@ type AddProductPayload = {
 
 type ProductsState = {
 	products: Product[];
+	loading: boolean;
+	error: string | null;
 	query: string;
 	setQuery: (q: string) => void;
-	filteredProducts: Product[];
-	addProduct: (p: AddProductPayload) => void;
-	updateProduct: (id: string, updates: Partial<Product>) => void;
-	removeProduct: (id: string) => void;
+	fetchProducts: () => Promise<void>;
+	addProduct: (p: AddProductPayload) => Promise<void>;
+	updateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
+	removeProduct: (id: string) => Promise<void>;
 	reloadProducts: () => void;
 	filters: { category?: string; brand?: string; min?: number; max?: number; sort?: 'new'|'low'|'high'|'best' };
 	setFilters: (f: Partial<ProductsState['filters']>) => void;
@@ -40,75 +45,111 @@ type ProductsState = {
 	brands: string[];
 	getCategories: () => string[];
 	getBrands: () => string[];
+	getFilteredProducts: () => Product[];
+	cache: {
+		products: Product[];
+		categories: any[];
+		brands: any[];
+		lastFetch: number;
+	};
 };
 
-const SAMPLE_IMAGES = [
-	'https://images.unsplash.com/photo-1518779578993-ec3579fee39f?q=80&w=800&auto=format&fit=crop',
-	'https://images.unsplash.com/photo-1510557880182-3d4d3cba35a5?q=80&w=800&auto=format&fit=crop',
-	'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?q=80&w=800&auto=format&fit=crop',
-];
-
-const categories = ['มือถือ', 'แล็ปท็อป', 'อุปกรณ์เสริม'];
+const categories = ['มือถือ', 'แล็ปท็อป', 'อุปกรณ์เสริม', 'หูฟัง', 'กล้อง'];
 const brands = ['A-Tech', 'B-Plus', 'C-Lab'];
 
-const initialProducts: Product[] = Array.from({ length: 12 }).map((_, i) => ({
-	id: `p${i + 1}`,
-	name: `Electronic Product ${i + 1}`,
-	price: 990 + i * 100,
-	image: SAMPLE_IMAGES[i % SAMPLE_IMAGES.length],
-	description: 'Short product description for project demonstration',
-	category: categories[i % categories.length],
-	brand: brands[i % brands.length],
-	rating: (i % 5) + 1,
-	isNew: i % 4 === 0,
-	isSale: i % 3 === 0,
-}));
-
-// Load products from localStorage or use initial
-const loadProducts = (): Product[] => {
-	try {
-		const saved = localStorage.getItem('etech_products');
-		if (saved) {
-			const parsed = JSON.parse(saved);
-			return Array.isArray(parsed) ? parsed : initialProducts;
-		}
-		return initialProducts;
-	} catch {
-		return initialProducts;
-	}
-};
-
-// Save products to localStorage
-const saveProducts = (products: Product[]) => {
-	try {
-		localStorage.setItem('etech_products', JSON.stringify(products));
-	} catch (error) {
-		console.error('Error saving products:', error);
-	}
-};
 
 export const useProducts = create<ProductsState>((set, get) => ({
-	products: loadProducts(),
+	products: [],
+	loading: false,
+	error: null,
 	query: '',
 	setQuery: (q) => set({ query: q }),
 	filters: {},
 	setFilters: (f) => set({ filters: { ...get().filters, ...f } }),
-	categories,
-	brands,
+	categories: [],
+	brands: [],
+	cache: {
+		products: [],
+		categories: [],
+		brands: [],
+		lastFetch: 0
+	},
+	fetchProducts: async () => {
+		const { cache } = get();
+		const now = Date.now();
+		const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+		
+		// Check if cache is still valid
+		if (cache.products.length > 0 && (now - cache.lastFetch) < CACHE_DURATION) {
+			set({ products: cache.products, loading: false });
+			return;
+		}
+		
+		set({ loading: true, error: null });
+		try {
+			const response = await apiClient.get('/products');
+			const { data } = response.data;
+			
+			// Transform backend data to frontend format
+			const transformedProducts = data
+				.filter((product: any) => product && product.id && product.name) // Filter out invalid products
+				.map((product: any) => ({
+					id: product.id,
+					name: product.name,
+					price: product.price,
+					image: product.image_url,
+					description: product.description,
+					category: product.categories?.name || 'Unknown',
+					brand: product.brands?.name || 'Unknown',
+					rating: product.rating || 0,
+					isNew: product.is_new || false,
+					isSale: product.is_sale || false,
+					stockQuantity: product.stock_quantity
+				}));
+			
+			// Update cache
+			set({ 
+				products: transformedProducts, 
+				loading: false,
+				cache: {
+					products: transformedProducts,
+					categories: cache.categories,
+					brands: cache.brands,
+					lastFetch: now
+				}
+			});
+		} catch (error) {
+			console.error('Failed to fetch products:', error);
+			set({ error: 'Failed to fetch products', loading: false });
+		}
+	},
 	getCategories: () => {
 		const products = Array.isArray(get().products) ? get().products : [];
 		const uniqueCategories = [...new Set(products.map(p => p.category))];
 		return [...new Set([...categories, ...uniqueCategories])];
+	},
+	getCategoriesForDisplay: () => {
+		const products = Array.isArray(get().products) ? get().products : [];
+		const uniqueCategories = [...new Set(products.map(p => p.category))];
+		const allCategories = [...new Set([...categories, ...uniqueCategories])];
+		return [
+			{ value: '', label: 'All Categories' },
+			...allCategories.map(c => ({
+				value: c,
+				label: translateCategory(c)
+			}))
+		];
 	},
 	getBrands: () => {
 		const products = Array.isArray(get().products) ? get().products : [];
 		const uniqueBrands = [...new Set(products.map(p => p.brand))];
 		return [...new Set([...brands, ...uniqueBrands])];
 	},
-	get filteredProducts() {
+	getFilteredProducts: () => {
 		const q = get().query.trim().toLowerCase();
 		const { category, brand, min, max, sort } = get().filters;
 		const products = Array.isArray(get().products) ? get().products : [];
+		
 		let list = products.filter(p =>
 			(!q || p.name.toLowerCase().includes(q)) &&
 			(!category || p.category === category) &&
@@ -120,83 +161,152 @@ export const useProducts = create<ProductsState>((set, get) => ({
 		if (sort === 'low') list = [...list].sort((a,b)=> a.price - b.price);
 		if (sort === 'high') list = [...list].sort((a,b)=> b.price - a.price);
 		if (sort === 'best') list = [...list].sort((a,b)=> b.rating - a.rating);
+		
 		return list;
 	},
-	addProduct: ({ name, price, category, brand, description, image, rating, isNew, isSale }) => set(state => {
-		const currentProducts = Array.isArray(state.products) ? state.products : [];
-		const id = `p${currentProducts.length + 1}`;
-		const product: Product = { 
-			id, 
-			name, 
-			price, 
-			image: image || SAMPLE_IMAGES[currentProducts.length % SAMPLE_IMAGES.length], 
-			description: description || 'New product added', 
-			category: category || categories[0], 
-			brand: brand || brands[0], 
-			rating: rating || 4, 
-			isNew: isNew || false,
-			isSale: isSale || false
-		};
-		const newProducts = [product, ...currentProducts];
-		saveProducts(newProducts);
-		
-		// Update categories and brands arrays with new unique values
-		const newCategories = [...new Set([...categories, product.category])];
-		const newBrands = [...new Set([...brands, product.brand])];
-		
-		return { 
-			products: newProducts,
-			categories: newCategories,
-			brands: newBrands
-		};
-	}),
-	updateProduct: (id, updates) => set(state => {
-		const currentProducts = Array.isArray(state.products) ? state.products : [];
-		const newProducts = currentProducts.map(p => p.id === id ? { ...p, ...updates } : p);
-		saveProducts(newProducts);
-		
-		// Update categories and brands arrays with new unique values from all products
-		const allCategories = [...new Set(newProducts.map(p => p.category))];
-		const allBrands = [...new Set(newProducts.map(p => p.brand))];
-		const newCategories = [...new Set([...categories, ...allCategories])];
-		const newBrands = [...new Set([...brands, ...allBrands])];
-		
-		return { 
-			products: newProducts,
-			categories: newCategories,
-			brands: newBrands
-		};
-	}),
-	removeProduct: (id) => set(state => {
-		const currentProducts = Array.isArray(state.products) ? state.products : [];
-		const newProducts = currentProducts.filter(p => p.id !== id);
-		saveProducts(newProducts);
-		
-		// Update categories and brands arrays with remaining unique values
-		const allCategories = [...new Set(newProducts.map(p => p.category))];
-		const allBrands = [...new Set(newProducts.map(p => p.brand))];
-		const newCategories = [...new Set([...categories, ...allCategories])];
-		const newBrands = [...new Set([...brands, ...allBrands])];
-		
-		return { 
-			products: newProducts,
-			categories: newCategories,
-			brands: newBrands
-		};
-	}),
-	reloadProducts: () => set(state => {
-		const newProducts = loadProducts();
-		const allCategories = [...new Set(newProducts.map(p => p.category))];
-		const allBrands = [...new Set(newProducts.map(p => p.brand))];
-		const newCategories = [...new Set([...categories, ...allCategories])];
-		const newBrands = [...new Set([...brands, ...allBrands])];
-		
-		return { 
-			products: newProducts,
-			categories: newCategories,
-			brands: newBrands
-		};
-	}),
+	addProduct: async ({ name, price, category, brand, description, image, rating, isNew, isSale }) => {
+		set({ loading: true, error: null });
+		try {
+			const { cache } = get();
+			const now = Date.now();
+			const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes for categories/brands
+			
+			let categoryData, brandData;
+			
+			// Check cache for categories
+			if (cache.categories.length > 0 && (now - cache.lastFetch) < CACHE_DURATION) {
+				categoryData = cache.categories.find((c: any) => c.name === category);
+			} else {
+				const categoryResponse = await apiClient.get('/products/categories');
+				categoryData = categoryResponse.data.data.find((c: any) => c.name === category);
+				// Update cache
+				set(state => ({
+					cache: {
+						...state.cache,
+						categories: categoryResponse.data.data,
+						lastFetch: now
+					}
+				}));
+			}
+			
+			// Check cache for brands
+			if (cache.brands.length > 0 && (now - cache.lastFetch) < CACHE_DURATION) {
+				brandData = cache.brands.find((b: any) => b.name === brand);
+			} else {
+				const brandResponse = await apiClient.get('/products/brands');
+				brandData = brandResponse.data.data.find((b: any) => b.name === brand);
+				// Update cache
+				set(state => ({
+					cache: {
+						...state.cache,
+						brands: brandResponse.data.data,
+						lastFetch: now
+					}
+				}));
+			}
+			
+			if (!categoryData || !brandData) {
+				throw new Error(`Category "${category}" or brand "${brand}" not found`);
+			}
+			
+			// If category doesn't exist, create it
+			if (!categoryData) {
+				console.log(`Creating new category: ${category}`);
+				const newCategoryResponse = await apiClient.post('/products/categories', { name: category });
+				categoryData = newCategoryResponse.data.data;
+			}
+			
+			// If brand doesn't exist, create it
+			if (!brandData) {
+				console.log(`Creating new brand: ${brand}`);
+				const newBrandResponse = await apiClient.post('/products/brands', { name: brand });
+				brandData = newBrandResponse.data.data;
+			}
+			
+			const response = await apiClient.post('/products', {
+				name,
+				price,
+				description,
+				categoryId: categoryData.id,
+				brandId: brandData.id,
+				imageUrl: image,
+				rating,
+				isNew,
+				isSale
+			});
+			
+			// Transform the response data to match frontend format
+			const transformedProduct = {
+				id: response.data.id,
+				name: response.data.name,
+				price: response.data.price,
+				image: response.data.image_url,
+				description: response.data.description,
+				category: category,
+				brand: brand,
+				rating: response.data.rating || 0,
+				isNew: response.data.is_new || false,
+				isSale: response.data.is_sale || false,
+				stockQuantity: response.data.stock_quantity
+			};
+			
+			set(state => ({ products: [transformedProduct, ...state.products], loading: false }));
+			
+			// Refresh categories and brands after adding new ones
+			await get().fetchProducts();
+		} catch (error) {
+			console.error('Add product error:', error);
+			set({ error: 'Failed to add product', loading: false });
+		}
+	},
+	updateProduct: async (id, updates) => {
+		set({ loading: true, error: null });
+		try {
+			const response = await apiClient.put(`/admin/products/${id}`, updates);
+			const { data } = response.data;
+			
+			// Transform the data to match frontend format
+			const transformedProduct = {
+				id: data.id,
+				name: data.name,
+				price: data.price,
+				image: data.image_url,
+				description: data.description,
+				category: data.category,
+				brand: data.brand,
+				rating: data.rating || 0,
+				isNew: data.is_new || false,
+				isSale: data.is_sale || false,
+				stockQuantity: data.stock_quantity
+			};
+			
+			set(state => ({
+				products: state.products.map(p => p.id === id ? transformedProduct : p),
+				loading: false
+			}));
+			
+			return transformedProduct;
+		} catch (error) {
+			set({ error: 'Failed to update product', loading: false });
+			throw error;
+		}
+	},
+	removeProduct: async (id) => {
+		set({ loading: true, error: null });
+		try {
+			await apiClient.delete(`/admin/products/${id}`);
+			set(state => ({
+				products: state.products.filter(p => p.id !== id),
+				loading: false
+			}));
+		} catch (error) {
+			set({ error: 'Failed to remove product', loading: false });
+		}
+	},
+	reloadProducts: () => {
+		// Refetch products from API instead of using dummy data
+		get().fetchProducts();
+	},
 }));
 
 

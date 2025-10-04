@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuthStore } from '../store/auth';
-import { useOrdersStore } from '../store/orders';
-import { Navigate } from 'react-router-dom';
+import { useAdminStore } from '../store/admin';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 import CustomSelect from '../components/CustomSelect';
 
@@ -9,39 +9,22 @@ export default function AdminOrders() {
     const { user } = useAuthStore();
     if (!user || user.role !== 'admin') return <Navigate to="/" replace />;
     
-    const { orders, updateOrderStatus } = useOrdersStore();
+    const { orders, loading, fetchOrders, updateOrderStatus, deleteOrder } = useAdminStore();
+    const navigate = useNavigate();
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('all');
     const [sortBy, setSortBy] = useState<string>('newest');
 
-    // Get all orders from all users for admin
-    const getAllOrders = () => {
-        try {
-            const allOrders: any[] = [];
-            const profiles = localStorage.getItem('etech_profiles');
-            if (profiles) {
-                const profilesData = JSON.parse(profiles);
-                Object.keys(profilesData).forEach(email => {
-                    const userOrders = localStorage.getItem(`etech_orders_${email}`);
-                    if (userOrders) {
-                        const orders = JSON.parse(userOrders);
-                        allOrders.push(...orders);
-                    }
-                });
-            }
-            return allOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        } catch {
-            return [];
-        }
-    };
-    
-    const allOrders = getAllOrders();
+    // Fetch orders when component mounts
+    useEffect(() => {
+        fetchOrders();
+    }, [fetchOrders]);
 
-    const filteredOrders = allOrders
+    const filteredOrders = orders
         .filter(order => {
-            const matchesSearch = order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                                order.address.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                                order.address.lastName.toLowerCase().includes(searchQuery.toLowerCase());
+            const matchesSearch = order.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                order.customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                order.customer.email.toLowerCase().includes(searchQuery.toLowerCase());
             const matchesStatus = statusFilter === 'all' || order.status.toLowerCase() === statusFilter;
             return matchesSearch && matchesStatus;
         })
@@ -60,60 +43,40 @@ export default function AdminOrders() {
             }
         });
 
-    const handleStatusUpdate = (orderId: string, newStatus: string) => {
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white flex items-center justify-center">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-4 text-gray-600">Loading orders...</p>
+                </div>
+            </div>
+        );
+    }
+
+    const handleStatusUpdate = async (orderId: string, newStatus: string) => {
         try {
-            const profiles = localStorage.getItem('etech_profiles');
-            if (!profiles) return;
-            const profilesData = JSON.parse(profiles);
-            
-            // Find which user owns this order and update it
-            for (const email of Object.keys(profilesData)) {
-                const userOrders = localStorage.getItem(`etech_orders_${email}`);
-                if (userOrders) {
-                    const orders = JSON.parse(userOrders);
-                    const orderIndex = orders.findIndex((o: any) => o.id === orderId);
-                    if (orderIndex !== -1) {
-                        orders[orderIndex].status = newStatus;
-                        localStorage.setItem(`etech_orders_${email}`, JSON.stringify(orders));
-                        break;
-                    }
-                }
-            }
-            
-            // Refresh the page to show updated data
-            window.location.reload();
+            await updateOrderStatus(orderId, newStatus);
+            // Refresh orders after update
+            fetchOrders();
         } catch (error) {
             console.error('Error updating order status:', error);
         }
     };
 
-    const handleDeleteOrder = (orderId: string) => {
+    const handleDeleteOrder = async (orderId: string) => {
         if (window.confirm('Are you sure you want to delete this order? This action cannot be undone.')) {
             try {
-                const profiles = localStorage.getItem('etech_profiles');
-                if (!profiles) return;
-                const profilesData = JSON.parse(profiles);
-                
-                // Find which user owns this order and delete it
-                for (const email of Object.keys(profilesData)) {
-                    const userOrders = localStorage.getItem(`etech_orders_${email}`);
-                    if (userOrders) {
-                        const orders = JSON.parse(userOrders);
-                        const orderIndex = orders.findIndex((o: any) => o.id === orderId);
-                        if (orderIndex !== -1) {
-                            orders.splice(orderIndex, 1);
-                            localStorage.setItem(`etech_orders_${email}`, JSON.stringify(orders));
-                            break;
-                        }
-                    }
-                }
-                
-                // Refresh the page to show updated data
-                window.location.reload();
+                await deleteOrder(orderId);
+                // Orders will be automatically updated in the store
             } catch (error) {
                 console.error('Error deleting order:', error);
             }
         }
+    };
+
+    const handleViewOrder = (orderId: string) => {
+        navigate(`/orders/${orderId}`);
     };
 
     return (
@@ -149,6 +112,7 @@ export default function AdminOrders() {
                             value={statusFilter}
                             onChange={setStatusFilter}
                             placeholder="Select status..."
+                            allowCustomInput={false}
                         />
                     </div>
                     <div>
@@ -163,6 +127,7 @@ export default function AdminOrders() {
                             value={sortBy}
                             onChange={setSortBy}
                             placeholder="Sort by..."
+                            allowCustomInput={false}
                         />
                     </div>
                 </div>
@@ -187,16 +152,19 @@ export default function AdminOrders() {
                             {filteredOrders.map((order) => (
                                 <tr key={order.id} className="hover:bg-gray-50">
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        <Link to={`/orders/${order.id}`} className="text-blue-600 hover:text-blue-700 font-medium">
-                                            #{order.id}
-                                        </Link>
+                                        <button 
+                                            onClick={() => handleViewOrder(order.id)} 
+                                            className="text-blue-600 hover:text-blue-700 font-medium"
+                                        >
+                                            #{order.orderNumber}
+                                        </button>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div>
                                             <div className="text-sm font-medium text-gray-900">
-                                                {order.address.firstName} {order.address.lastName}
+                                                {order.customer.name}
                                             </div>
-                                            <div className="text-sm text-gray-500">{order.address.phone}</div>
+                                            <div className="text-sm text-gray-500">{order.customer.email}</div>
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -230,12 +198,12 @@ export default function AdminOrders() {
                                                 <option value="Shipped">Shipped</option>
                                                 <option value="Completed">Completed</option>
                                             </select>
-                                            <Link
-                                                to={`/orders/${order.id}`}
+                                            <button
+                                                onClick={() => handleViewOrder(order.id)}
                                                 className="text-blue-600 hover:text-blue-700 text-xs px-2 py-1 rounded border"
                                             >
                                                 View
-                                            </Link>
+                                            </button>
                                             <button
                                                 onClick={() => handleDeleteOrder(order.id)}
                                                 className="text-red-600 hover:text-red-700 text-xs px-2 py-1 rounded border"

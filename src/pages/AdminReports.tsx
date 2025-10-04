@@ -1,30 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuthStore } from '../store/auth';
 import { useProducts } from '../store/products';
+import { useAdminStore } from '../store/admin';
 import CustomSelect from '../components/CustomSelect';
 
 type PaymentMethod = 'Bank Transfer' | 'QR PromptPay' | 'Credit Card' | string;
 
-function readAllOrders() {
-    try {
-        const allOrders: any[] = [];
-        const profiles = localStorage.getItem('etech_profiles');
-        if (profiles) {
-            const profilesData = JSON.parse(profiles);
-            Object.keys(profilesData).forEach((email: string) => {
-                const userOrders = localStorage.getItem(`etech_orders_${email}`);
-                if (userOrders) {
-                    const orders = JSON.parse(userOrders);
-                    allOrders.push(...orders);
-                }
-            });
-        }
-        return allOrders.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    } catch {
-        return [] as any[];
-    }
-}
+// Removed readAllOrders function - now using API data
 
 function startOfDay(d: Date) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
 function endOfDay(d: Date) { const x = new Date(d); x.setHours(23,59,59,999); return x; }
@@ -33,13 +16,16 @@ function formatYMD(d: Date) { return d.toISOString().slice(0,10); }
 export default function AdminReports() {
     const { user } = useAuthStore();
     const { products } = useProducts();
-    if (!user || user.role !== 'admin') return <Navigate to="/" replace />;
+    const { orders: allOrders, loading, fetchOrders } = useAdminStore();
+    
+    // Fetch orders when component mounts
+    useEffect(() => {
+        fetchOrders();
+    }, [fetchOrders]);
 
     const [range, setRange] = useState<'7d' | '30d' | '90d' | 'custom'>('7d');
     const [from, setFrom] = useState<string>(() => formatYMD(new Date(Date.now() - 6*24*60*60*1000)));
     const [to, setTo] = useState<string>(() => formatYMD(new Date()));
-
-    const allOrders = useMemo(() => readAllOrders(), []);
 
     // update dates when preset changes
     function onPresetChange(val: '7d' | '30d' | '90d' | 'custom') {
@@ -129,69 +115,110 @@ export default function AdminReports() {
         return Object.entries(map).map(([method, count]) => ({ method, count, pct: Math.round((count as number) * 100 / total) }));
     }, [filtered]);
 
+    // 5) Revenue by status
+    const revenueByStatus = useMemo(() => {
+        const statusRevenue: Record<string, number> = {};
+        filtered.forEach((o: any) => {
+            statusRevenue[o.status] = (statusRevenue[o.status] || 0) + o.grandTotal;
+        });
+        return Object.entries(statusRevenue)
+            .map(([status, revenue]) => ({ status, revenue }))
+            .sort((a, b) => b.revenue - a.revenue);
+    }, [filtered]);
+
+    // 6) Average order value
+    const avgOrderValue = useMemo(() => {
+        if (filtered.length === 0) return 0;
+        const total = filtered.reduce((sum, o) => sum + o.grandTotal, 0);
+        return total / filtered.length;
+    }, [filtered]);
+
+    // 7) Total revenue and orders
+    const totalRevenue = useMemo(() => {
+        return filtered.reduce((sum, o) => sum + o.grandTotal, 0);
+    }, [filtered]);
+
+    const totalOrders = useMemo(() => {
+        return filtered.length;
+    }, [filtered]);
+
+    // Check admin role after all hooks
+    if (!user || user.role !== 'admin') return <Navigate to="/" replace />;
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white flex items-center justify-center">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-4 text-gray-600">Loading reports...</p>
+                </div>
+            </div>
+        );
+    }
+
     // CSV export
     function exportCSV() {
-        const headers = ['Date','Order ID','Customer','Items','Subtotal','VAT','Shipping','Grand Total','Payment','Status'];
-        const rows = filtered.map((o: any) => [
-            new Date(o.createdAt).toISOString(),
-            o.id,
-            `${o.address.firstName} ${o.address.lastName}`,
-            String(o.items.length),
-            String(o.subtotal),
-            String(o.vat),
-            String(o.shipping),
-            String(o.grandTotal),
-            o.payment,
+        const headers = ['Date', 'Order ID', 'Customer', 'Status', 'Payment', 'Items', 'Subtotal', 'VAT', 'Shipping', 'Total'];
+        const rows = filtered.map(o => [
+            new Date(o.createdAt).toLocaleDateString(),
+            o.orderNumber || o.id,
+            o.customer?.name || 'N/A',
             o.status,
+            o.payment || 'N/A',
+            o.items?.length || 0,
+            o.subtotal,
+            o.vat,
+            o.shipping,
+            o.grandTotal
         ]);
-        const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `reports_${from}_${to}.csv`;
+        a.download = `orders-${from}-to-${to}.csv`;
         a.click();
         URL.revokeObjectURL(url);
     }
-
-    const totalRevenue = filtered.reduce((s: number, o: any) => s + o.grandTotal, 0);
-    const totalOrders = filtered.length;
 
     return (
         <div className="mx-auto max-w-7xl p-4 space-y-6">
             <div className="flex items-center justify-between">
                 <h1 className="text-3xl font-bold">Reports & Analytics</h1>
-                <Link to="/admin" className="text-blue-600 hover:text-blue-700">← Back to Dashboard</Link>
-            </div>
-
-            {/* Filters */}
-            <div className="card-themed p-6 rounded-2xl">
-                <div className="flex flex-col md:flex-row gap-4 items-center">
+                <div className="flex items-center gap-3">
                     <div className="flex items-center gap-2">
-                        <label className="text-sm text-gray-600">Preset</label>
                         <CustomSelect
                             options={[
-                                { value: "7d", label: "Last 7 days" },
-                                { value: "30d", label: "Last 30 days" },
-                                { value: "90d", label: "Last 90 days" },
-                                { value: "custom", label: "Custom" }
+                                { value: '7d', label: 'Last 7 days' },
+                                { value: '30d', label: 'Last 30 days' },
+                                { value: '90d', label: 'Last 90 days' },
+                                { value: 'custom', label: 'Custom range' }
                             ]}
                             value={range}
-                            onChange={(value) => onPresetChange(value as any)}
-                            placeholder="Select range..."
-                            className="w-40"
+                            onChange={(val) => onPresetChange(val as any)}
+                            placeholder="Select period..."
+                            allowCustomInput={false}
                         />
+                        {range === 'custom' && (
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="date"
+                                    value={from}
+                                    onChange={(e) => setFrom(e.target.value)}
+                                    className="px-3 py-2 border rounded-lg text-sm"
+                                />
+                                <span className="text-gray-500">to</span>
+                                <input
+                                    type="date"
+                                    value={to}
+                                    onChange={(e) => setTo(e.target.value)}
+                                    className="px-3 py-2 border rounded-lg text-sm"
+                                />
+                            </div>
+                        )}
                     </div>
-                    <div className="flex items-center gap-2">
-                        <label className="text-sm text-gray-600">From</label>
-                        <input type="date" value={from} onChange={e=>setFrom(e.target.value)} className="border rounded-full px-3 py-2" />
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <label className="text-sm text-gray-600">To</label>
-                        <input type="date" value={to} onChange={e=>setTo(e.target.value)} className="border rounded-full px-3 py-2" />
-                    </div>
-                    <div className="flex-1" />
                     <button onClick={exportCSV} className="btn-primary rounded-full px-5 py-2">Export CSV</button>
+                    <Link to="/admin" className="text-blue-600 hover:text-blue-700">← Back to Dashboard</Link>
                 </div>
             </div>
 
@@ -215,108 +242,112 @@ export default function AdminReports() {
             <div className="card-themed p-6 rounded-2xl">
                 <h2 className="text-xl font-semibold mb-4">Sales by Day</h2>
                 {salesByDay.length > 0 ? (
-                    <div className="grid grid-cols-12 gap-2 items-end h-40">
-                        {salesByDay.map(row => (
-                            <div key={row.date} className="col-span-1">
-                                <div className="bg-blue-500 rounded-t-md" style={{height: `${Math.min(100, Math.round((row.amount/Math.max(1,totalRevenue))*100))}%`}} />
-                                <div className="text-[10px] text-gray-600 mt-1 text-center">{row.date.slice(5)}</div>
+                    <div className="space-y-2">
+                        {salesByDay.map((day) => (
+                            <div key={day.date} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                                <span className="font-medium">{new Date(day.date).toLocaleDateString()}</span>
+                                <span className="text-lg font-semibold text-purple-600">฿{day.amount.toLocaleString()}</span>
                             </div>
                         ))}
                     </div>
                 ) : (
-                    <div className="h-40 flex items-center justify-center text-gray-500">
-                        <div className="text-center">
-                            <div className="text-lg mb-2">No sales data</div>
-                            <div className="text-sm">Try selecting a different date range</div>
-                        </div>
-                    </div>
+                    <p className="text-gray-500 text-center py-4">No sales data for selected period</p>
                 )}
             </div>
 
-            {/* Orders per day/week */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="card-themed p-6 rounded-2xl">
-                    <h2 className="text-xl font-semibold mb-4">Orders per Day</h2>
-                    {ordersPerDay.length > 0 ? (
-                        <div className="grid grid-cols-12 gap-2 items-end h-40">
-                            {ordersPerDay.map(row => (
-                                <div key={row.date} className="col-span-1">
-                                    <div className="bg-emerald-500 rounded-t-md" style={{height: `${Math.min(100, row.count*12)}%`}} />
-                                    <div className="text-[10px] text-gray-600 mt-1 text-center">{row.date.slice(5)}</div>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="h-40 flex items-center justify-center text-gray-500">
-                            <div className="text-center">
-                                <div className="text-lg mb-2">No orders data</div>
-                                <div className="text-sm">Try selecting a different date range</div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-                <div className="card-themed p-6 rounded-2xl">
-                    <h2 className="text-xl font-semibold mb-4">Orders per Week</h2>
+            {/* Orders per day */}
+            <div className="card-themed p-6 rounded-2xl">
+                <h2 className="text-xl font-semibold mb-4">Orders per Day</h2>
+                {ordersPerDay.length > 0 ? (
                     <div className="space-y-2">
-                        {ordersPerWeek.map(row => (
-                            <div key={row.week} className="flex items-center gap-3">
-                                <div className="w-28 text-sm text-gray-600">{row.week}</div>
-                                <div className="flex-1 bg-purple-100 rounded-full h-3 overflow-hidden">
-                                    <div className="bg-purple-600 h-full" style={{width: `${Math.min(100, row.count*10)}%`}} />
-                                </div>
-                                <div className="w-10 text-sm text-gray-700 text-right">{row.count}</div>
+                        {ordersPerDay.map((day) => (
+                            <div key={day.date} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                                <span className="font-medium">{new Date(day.date).toLocaleDateString()}</span>
+                                <span className="text-lg font-semibold text-blue-600">{day.count} orders</span>
                             </div>
                         ))}
                     </div>
-                </div>
+                ) : (
+                    <p className="text-gray-500 text-center py-4">No orders data for selected period</p>
+                )}
             </div>
 
-            {/* Top selling */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="card-themed p-6 rounded-2xl">
-                    <h2 className="text-xl font-semibold mb-4">Top-selling Products</h2>
+            {/* Top products */}
+            <div className="card-themed p-6 rounded-2xl">
+                <h2 className="text-xl font-semibold mb-4">Top Selling Products</h2>
+                {topProducts.length > 0 ? (
                     <div className="space-y-2">
-                        {topProducts.map(({product, qty}) => (
-                            <div key={product.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                <div className="text-sm">
-                                    <div className="font-medium">{product.name}</div>
-                                    <div className="text-gray-600">{product.brand} • ฿{product.price.toLocaleString()}</div>
+                        {topProducts.map((item, index) => (
+                            <div key={item.product.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                                <div className="flex items-center gap-3">
+                                    <span className="text-sm font-medium text-gray-500">#{index + 1}</span>
+                                    <span className="font-medium">{item.product.name}</span>
                                 </div>
-                                <div className="font-semibold text-green-600">{qty} sold</div>
+                                <span className="text-lg font-semibold text-green-600">{item.qty} sold</span>
                             </div>
                         ))}
                     </div>
-                </div>
-                <div className="card-themed p-6 rounded-2xl">
-                    <h2 className="text-xl font-semibold mb-4">Top Brands</h2>
+                ) : (
+                    <p className="text-gray-500 text-center py-4">No product sales data for selected period</p>
+                )}
+            </div>
+
+            {/* Top brands */}
+            <div className="card-themed p-6 rounded-2xl">
+                <h2 className="text-xl font-semibold mb-4">Top Selling Brands</h2>
+                {topBrands.length > 0 ? (
                     <div className="space-y-2">
-                        {topBrands.map(({brand, qty}) => (
-                            <div key={brand} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                <div className="font-medium">{brand}</div>
-                                <div className="font-semibold text-blue-600">{qty}</div>
+                        {topBrands.map((item, index) => (
+                            <div key={item.brand} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                                <div className="flex items-center gap-3">
+                                    <span className="text-sm font-medium text-gray-500">#{index + 1}</span>
+                                    <span className="font-medium">{item.brand}</span>
+                                </div>
+                                <span className="text-lg font-semibold text-green-600">{item.qty} items sold</span>
                             </div>
                         ))}
                     </div>
-                </div>
+                ) : (
+                    <p className="text-gray-500 text-center py-4">No brand sales data for selected period</p>
+                )}
             </div>
 
             {/* Payment breakdown */}
             <div className="card-themed p-6 rounded-2xl">
                 <h2 className="text-xl font-semibold mb-4">Payment Methods</h2>
-                <div className="space-y-2">
-                    {paymentBreakdown.map(row => (
-                        <div key={row.method} className="flex items-center gap-3">
-                            <div className="w-40 text-sm text-gray-600">{row.method}</div>
-                            <div className="flex-1 bg-blue-100 rounded-full h-3 overflow-hidden">
-                                <div className="bg-blue-600 h-full" style={{width: `${row.pct}%`}} />
+                {paymentBreakdown.length > 0 ? (
+                    <div className="space-y-2">
+                        {paymentBreakdown.map((item) => (
+                            <div key={item.method} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                                <span className="font-medium">{item.method}</span>
+                                <div className="flex items-center gap-3">
+                                    <span className="text-sm text-gray-500">{item.pct}%</span>
+                                    <span className="text-lg font-semibold text-blue-600">{item.count} orders</span>
+                                </div>
                             </div>
-                            <div className="w-12 text-sm text-gray-700 text-right">{row.count}</div>
-                        </div>
-                    ))}
-                </div>
+                        ))}
+                    </div>
+                ) : (
+                    <p className="text-gray-500 text-center py-4">No payment data for selected period</p>
+                )}
+            </div>
+
+            {/* Revenue by status */}
+            <div className="card-themed p-6 rounded-2xl">
+                <h2 className="text-xl font-semibold mb-4">Revenue by Order Status</h2>
+                {revenueByStatus.length > 0 ? (
+                    <div className="space-y-2">
+                        {revenueByStatus.map((item) => (
+                            <div key={item.status} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                                <span className="font-medium">{item.status}</span>
+                                <span className="text-lg font-semibold text-purple-600">฿{item.revenue.toLocaleString()}</span>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <p className="text-gray-500 text-center py-4">No revenue data for selected period</p>
+                )}
             </div>
         </div>
     );
 }
-
-

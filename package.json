@@ -6,19 +6,25 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:prod": "VITE_API_BASE_URL=https://bdnode.onrender.com/api tsc -b && vite build",
+    "deploy": "npm run build:prod",
+    "docker:build": "docker build -t etech-frontend .",
+    "docker:run": "docker run -p 3000:80 etech-frontend",
+    "render:deploy": "npm run build:prod && echo 'Ready for Render deployment'"
   },
   "dependencies": {
+    "axios": "^1.12.2",
+    "classnames": "^2.5.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.27.0",
-    "zustand": "^4.5.2",
-    "classnames": "^2.5.1"
+    "zustand": "^4.5.2"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.3.2",
     "@types/react": "^18.3.8",
     "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.2",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.14",
@@ -26,5 +32,3 @@
     "vite": "^5.4.9"
   }
 }
-
-
