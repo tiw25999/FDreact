@@ -7,13 +7,19 @@ import { useSearchParams } from 'react-router-dom';
 import { getCategoryOptions, translateCategory } from '../utils/categoryTranslator';
 
 export default function Search() {
-    const { products, setQuery, getCategories, getCategoriesForDisplay, getBrands, setFilters, filters, query } = useProducts();
+    const { products, setQuery, getCategories, getCategoriesForDisplay, getBrands, getBrandsForDisplay, setFilters, filters, query, fetchCategories, fetchBrands } = useProducts();
     const categories = getCategories();
     const brands = getBrands();
     const [drawer, setDrawer] = useState(false);
     const [params, setParams] = useSearchParams();
 
 	const { push } = useToast();
+
+    // Load categories and brands on component mount
+    useEffect(() => {
+        fetchCategories();
+        fetchBrands();
+    }, [fetchCategories, fetchBrands]);
 
     // sync sort via query string (?sort=best|low|high|new)
     useEffect(() => {
@@ -71,10 +77,10 @@ export default function Search() {
 				</div>
 			</div>
 
-			<div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <aside className="hidden md:block space-y-4 bg-gradient-to-br from-white to-blue-50 border border-blue-100 rounded-3xl p-6 h-max shadow-lg relative z-20">
+			<div className="grid grid-cols-1 md:grid-cols-4 gap-6 overflow-visible">
+                <aside className="hidden md:block space-y-6 bg-gradient-to-br from-white to-blue-50 border border-blue-100 rounded-3xl p-6 h-max shadow-lg relative z-10 overflow-visible" style={{ isolation: 'isolate' }}>
                     <input className="w-full border-2 border-gray-200 rounded-full px-4 py-3 text-sm font-medium bg-white shadow-sm hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all duration-200" placeholder="Search products..." defaultValue={params.get('q')||''} onChange={e=>{ const p = Object.fromEntries(params.entries()); setQuery(e.target.value); setParams({ ...p, q: e.target.value }); }} />
-					<div>
+					<div className="relative z-60">
 						<div className="font-semibold text-gray-700 mb-2 text-sm">Category</div>
                         <CustomSelect
                             options={getCategoriesForDisplay()}
@@ -88,12 +94,12 @@ export default function Search() {
                             allowCustomInput={false}
                         />
 					</div>
-					<div>
+					<div className="relative z-50">
 						<div className="font-semibold text-gray-700 mb-2 text-sm">Brand</div>
                         <CustomSelect
                             options={[
                                 { value: "", label: "All Brands" },
-                                ...brands.map(b => ({ value: b, label: b }))
+                                ...getBrandsForDisplay()
                             ]}
                             value={filters.brand || ''}
                             onChange={(value) => {
@@ -126,7 +132,7 @@ export default function Search() {
 			{drawer && (
 				<div className="fixed inset-0 z-[10000] md:hidden">
 					<div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={()=>setDrawer(false)}></div>
-					<div className="absolute top-0 right-0 h-full w-80 bg-gradient-to-br from-white to-blue-50 p-6 space-y-4 shadow-2xl">
+					<div className="absolute top-0 right-0 h-full w-80 bg-gradient-to-br from-white to-blue-50 p-6 space-y-4 shadow-2xl overflow-visible">
 						<div className="flex items-center justify-between">
 							<h2 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Filters</h2>
 							<button onClick={()=>setDrawer(false)} className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors">
@@ -136,15 +142,12 @@ export default function Search() {
 							</button>
 						</div>
 						<input className="w-full border-2 border-gray-200 rounded-full px-4 py-3 text-sm font-medium bg-white shadow-sm hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all duration-200" placeholder="Search products..." onChange={e=>setQuery(e.target.value)} />
-						<div>
+						<div className="relative z-60">
 							<div className="font-semibold text-gray-700 mb-2 text-sm">Category</div>
 							<CustomSelect
 								options={[
 									{ value: "", label: "All Categories" },
-									...categories.map(c => ({
-										value: c,
-										label: translateCategory(c)
-									}))
+									...getCategoriesForDisplay()
 								]}
 								value={filters.category || ''}
 								onChange={(value) => setFilters({ category: value || undefined })}
@@ -152,12 +155,12 @@ export default function Search() {
 								allowCustomInput={false}
 							/>
 						</div>
-						<div>
+						<div className="relative z-50">
 							<div className="font-semibold text-gray-700 mb-2 text-sm">Brand</div>
 							<CustomSelect
 								options={[
 									{ value: "", label: "All Brands" },
-									...brands.map(b => ({ value: b, label: b }))
+									...getBrandsForDisplay()
 								]}
 								value={filters.brand || ''}
 								onChange={(value) => setFilters({ brand: value || undefined })}

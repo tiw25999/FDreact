@@ -85,7 +85,7 @@ export default function CustomSelect({ options, value, onChange, placeholder = "
     };
 
     return (
-        <div className={`relative z-10 ${className}`} ref={dropdownRef}>
+        <div className={`relative z-[100] ${className}`} ref={dropdownRef} style={{ isolation: 'isolate' }}>
             <div className="relative">
                 <input
                     ref={inputRef}
@@ -114,7 +114,7 @@ export default function CustomSelect({ options, value, onChange, placeholder = "
             </div>
             
             {isOpen && (
-                <div className="absolute z-[9999] w-full mt-2 bg-white border border-gray-200 rounded-2xl shadow-lg overflow-hidden">
+                <div className="absolute z-[999999] w-full mt-2 bg-white border border-gray-200 rounded-2xl shadow-lg overflow-hidden" style={{ isolation: 'isolate' }}>
                     {filteredOptions.length > 0 ? (
                         filteredOptions.map((option) => (
                             <button
