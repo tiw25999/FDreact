@@ -198,10 +198,44 @@ VITE_APP_VERSION=1.0.0
 ## การ Deploy
 
 ### **Vercel (แนะนำ)**
-1. เชื่อมต่อ GitHub repository ของคุณกับ Vercel
-2. ตั้งคำสั่ง build: `npm run build`
-3. ตั้งไดเรกทอรี output: `dist`
-4. Deploy อัตโนมัติเมื่อ push
+โปรเจคนี้ได้รับการปรับแต่งให้พร้อมสำหรับการ deploy บน Vercel แล้ว!
+
+#### วิธีที่ 1: Vercel Dashboard (ง่ายที่สุด)
+1. ไปที่ [vercel.com](https://vercel.com) และเข้าสู่ระบบ
+2. คลิก "New Project"
+3. Import GitHub repository ของคุณ
+4. Vercel จะตรวจจับการตั้งค่า Vite อัตโนมัติ
+5. คลิก "Deploy"
+
+#### วิธีที่ 2: Vercel CLI
+```bash
+# ติดตั้ง Vercel CLI
+npm install -g vercel
+
+# เข้าสู่ระบบ
+vercel login
+
+# Deploy
+vercel
+
+# สำหรับ production
+vercel --prod
+```
+
+#### วิธีที่ 3: ใช้สคริปต์ deployment
+```bash
+cd Freact
+node deploy-vercel.js
+```
+
+#### การตั้งค่าที่พร้อมใช้งาน:
+- ✅ Build Command: `npm run build:prod`
+- ✅ Output Directory: `dist`
+- ✅ Environment Variables: `VITE_API_BASE_URL`
+- ✅ Routing: React Router configuration
+- ✅ Framework: Vite
+
+ดูคู่มือการ deploy แบบละเอียดได้ที่ [VERCEL_DEPLOYMENT.md](VERCEL_DEPLOYMENT.md)
 
 ### **Netlify**
 1. เชื่อมต่อ GitHub repository ของคุณกับ Netlify

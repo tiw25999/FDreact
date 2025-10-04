@@ -10,5 +10,10 @@
   ],
   "env": {
     "VITE_API_BASE_URL": "https://bdnode.onrender.com/api"
+  },
+  "functions": {
+    "app/api/**/*.js": {
+      "runtime": "nodejs18.x"
+    }
   }
 }
