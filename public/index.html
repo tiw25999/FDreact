@@ -4,18 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>E-Tech Store</title>
-    <script>
-      // SPA Routing Fallback for Render
-      (function() {
-        const path = window.location.pathname;
-        const isAsset = path.startsWith('/assets/') || path.includes('.');
-        
-        if (!isAsset && path !== '/') {
-          // Redirect to home page for SPA routing
-          window.location.replace('/');
-        }
-      })();
-    </script>
   </head>
   <body>
     <div id="root"></div>
