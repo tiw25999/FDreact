@@ -7,9 +7,10 @@ services:
       - key: VITE_API_BASE_URL
         value: https://bdnode.onrender.com/api
     routes:
-      - type: rewrite
+      - type: redirect
         source: /*
         destination: /index.html
+        status: 200
     headers:
       - path: /*
         name: X-Frame-Options

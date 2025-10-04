@@ -7,5 +7,13 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // SPA routing fallback for Render
+      if (window.location.pathname !== '/' && !window.location.pathname.startsWith('/assets/') && !window.location.pathname.includes('.')) {
+        // Only redirect if it's not an asset and not the root
+        window.history.replaceState(null, '', '/');
+        window.location.reload();
+      }
+    </script>
   </body>
 </html>

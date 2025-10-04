@@ -8,13 +8,6 @@
       "destination": "/index.html"
     }
   ],
-  "redirects": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html",
-      "permanent": false
-    }
-  ],
   "env": {
     "VITE_API_BASE_URL": "https://bdnode.onrender.com/api"
   }
