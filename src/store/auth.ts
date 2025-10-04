@@ -70,7 +70,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                 firstName: savedProfile.firstName || user.firstName,
                 lastName: savedProfile.lastName || user.lastName,
                 phone: savedProfile.phone || user.phone,
-                avatarUrl: savedProfile.avatarUrl || user.avatarUrl,
+                avatarUrl: user.avatarUrl || savedProfile.avatarUrl, // Prioritize backend avatarUrl
                 addresses: savedProfile.addresses || user.addresses,
                 defaultAddressIndex: savedProfile.defaultAddressIndex !== undefined ? savedProfile.defaultAddressIndex : user.defaultAddressIndex,
             } as NonNullable<User>;
@@ -117,7 +117,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                 firstName: savedProfile.firstName || user.firstName,
                 lastName: savedProfile.lastName || user.lastName,
                 phone: savedProfile.phone || user.phone,
-                avatarUrl: savedProfile.avatarUrl || user.avatarUrl,
+                avatarUrl: user.avatarUrl || savedProfile.avatarUrl, // Prioritize backend avatarUrl
                 addresses: savedProfile.addresses || user.addresses,
                 defaultAddressIndex: savedProfile.defaultAddressIndex !== undefined ? savedProfile.defaultAddressIndex : user.defaultAddressIndex,
             } as NonNullable<User>;
@@ -220,7 +220,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                 firstName: savedProfile.firstName || user.firstName,
                 lastName: savedProfile.lastName || user.lastName,
                 phone: savedProfile.phone || user.phone,
-                avatarUrl: savedProfile.avatarUrl || user.avatarUrl,
+                avatarUrl: user.avatarUrl || savedProfile.avatarUrl, // Prioritize backend avatarUrl
                 addresses: savedProfile.addresses || user.addresses,
                 defaultAddressIndex: savedProfile.defaultAddressIndex !== undefined ? savedProfile.defaultAddressIndex : user.defaultAddressIndex,
             } as NonNullable<User>;

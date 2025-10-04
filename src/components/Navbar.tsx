@@ -6,10 +6,16 @@ import { useCartStore } from '../store/cart';
 
 export default function Navbar() {
     const [open, setOpen] = useState(false);
-	const { setQuery } = useProducts();
+	const { setQuery, clearAllFilters } = useProducts();
 	const navigate = useNavigate();
     const { user, logoutAndRedirect } = useAuthStore();
     const cartCount = useCartStore(s => s.items.reduce((n, it) => n + it.quantity, 0));
+
+    // Handle logo click - clear all filters and go to home
+    const handleLogoClick = () => {
+        clearAllFilters();
+        navigate('/');
+    };
 
     // close profile dropdown when clicking outside
     useEffect(() => {
@@ -27,7 +33,7 @@ export default function Navbar() {
 	return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-[#0b1220] to-[#1e40af] text-white">
         <div className="mx-auto max-w-screen-2xl px-4 py-4 grid grid-cols-3 items-center gap-4">
-                <Link to="/" className="font-bold text-white text-4xl">E‑Tech</Link>
+                <button onClick={handleLogoClick} className="font-bold text-white text-4xl hover:text-blue-200 transition-colors">E‑Tech</button>
                 <form onSubmit={e=>{e.preventDefault(); navigate('/search');}} className="flex items-center gap-2">
                     <input className="w-full max-w-xl mx-auto rounded-full px-4 py-2 bg-white/90 text-gray-800 placeholder-gray-400 shadow-inner focus:ring-2 focus:ring-blue-300 outline-none" placeholder="Search products..." onChange={e=>setQuery(e.target.value)} />
                     <div className="relative group">

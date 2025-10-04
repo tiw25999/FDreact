@@ -41,6 +41,7 @@ type ProductsState = {
 	reloadProducts: () => void;
 	filters: { category?: string; brand?: string; min?: number; max?: number; sort?: 'new'|'low'|'high'|'best' };
 	setFilters: (f: Partial<ProductsState['filters']>) => void;
+	clearAllFilters: () => void;
 	categories: string[];
 	brands: string[];
 	getCategories: () => string[];
@@ -67,6 +68,7 @@ export const useProducts = create<ProductsState>((set, get) => ({
 	setQuery: (q) => set({ query: q }),
 	filters: {},
 	setFilters: (f) => set({ filters: { ...get().filters, ...f } }),
+	clearAllFilters: () => set({ query: '', filters: {} }),
 	categories: [],
 	brands: [],
 	cache: {
