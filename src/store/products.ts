@@ -35,6 +35,8 @@ type ProductsState = {
 	query: string;
 	setQuery: (q: string) => void;
 	fetchProducts: () => Promise<void>;
+	fetchCategories: () => Promise<any[]>;
+	fetchBrands: () => Promise<any[]>;
 	addProduct: (p: AddProductPayload) => Promise<void>;
 	updateProduct: (id: string, updates: Partial<Product>) => Promise<any>;
 	removeProduct: (id: string) => Promise<void>;
@@ -47,6 +49,7 @@ type ProductsState = {
 	getCategories: () => string[];
 	getBrands: () => string[];
 	getCategoriesForDisplay: () => Array<{ value: string; label: string }>;
+	getBrandsForDisplay: () => Array<{ value: string; label: string }>;
 	getFilteredProducts: () => Product[];
 	cache: {
 		products: Product[];
@@ -126,15 +129,79 @@ export const useProducts = create<ProductsState>((set, get) => ({
 			set({ error: 'Failed to fetch products', loading: false });
 		}
 	},
+	fetchCategories: async () => {
+		const { cache } = get();
+		const now = Date.now();
+		const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
+		
+		// Check if cache is still valid
+		if (cache.categories.length > 0 && (now - cache.lastFetch) < CACHE_DURATION) {
+			console.log('Using cached categories:', cache.categories);
+			return cache.categories;
+		}
+		
+		try {
+			console.log('Fetching categories from API...');
+			const response = await apiClient.get('/products/categories');
+			const { data } = response.data;
+			console.log('Categories fetched:', data);
+			
+			// Update cache
+			set(state => ({
+				...state,
+				cache: {
+					...state.cache,
+					categories: data,
+					lastFetch: now
+				}
+			}));
+			
+			return data;
+		} catch (error) {
+			console.error('Failed to fetch categories:', error);
+			return [];
+		}
+	},
+	fetchBrands: async () => {
+		const { cache } = get();
+		const now = Date.now();
+		const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
+		
+		// Check if cache is still valid
+		if (cache.brands.length > 0 && (now - cache.lastFetch) < CACHE_DURATION) {
+			console.log('Using cached brands:', cache.brands);
+			return cache.brands;
+		}
+		
+		try {
+			console.log('Fetching brands from API...');
+			const response = await apiClient.get('/products/brands');
+			const { data } = response.data;
+			console.log('Brands fetched:', data);
+			
+			// Update cache
+			set(state => ({
+				...state,
+				cache: {
+					...state.cache,
+					brands: data,
+					lastFetch: now
+				}
+			}));
+			
+			return data;
+		} catch (error) {
+			console.error('Failed to fetch brands:', error);
+			return [];
+		}
+	},
 	getCategories: () => {
-		const products = Array.isArray(get().products) ? get().products : [];
-		const uniqueCategories = [...new Set(products.map(p => p.category))];
-		return [...new Set([...categories, ...uniqueCategories])];
+		const { cache } = get();
+		return cache.categories.map((c: any) => c.name);
 	},
 	getBrands: () => {
-		const products = Array.isArray(get().products) ? get().products : [];
-		const uniqueBrands = [...new Set(products.map(p => p.brand))];
-		return [...new Set([...brands, ...uniqueBrands])];
+		const { cache } = get();
+		return cache.brands.map((b: any) => b.name);
 	},
 	getFilteredProducts: () => {
 		const q = get().query.trim().toLowerCase();
@@ -306,11 +373,24 @@ export const useProducts = create<ProductsState>((set, get) => ({
 	},
 
 	getCategoriesForDisplay: () => {
-		const { categories } = get();
-		return categories.map(cat => ({
-			value: cat,
-			label: translateCategory(cat)
+		const { cache } = get();
+		console.log('getCategoriesForDisplay - cache.categories:', cache.categories);
+		const result = cache.categories.map((cat: any) => ({
+			value: cat.name,
+			label: translateCategory(cat.name)
 		}));
+		console.log('getCategoriesForDisplay - result:', result);
+		return result;
+	},
+	getBrandsForDisplay: () => {
+		const { cache } = get();
+		console.log('getBrandsForDisplay - cache.brands:', cache.brands);
+		const result = cache.brands.map((brand: any) => ({
+			value: brand.name,
+			label: brand.name
+		}));
+		console.log('getBrandsForDisplay - result:', result);
+		return result;
 	},
 }));
 
