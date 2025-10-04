@@ -2,3 +2,6 @@ Options -MultiViews
 RewriteEngine On
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteRule ^ index.html [QSA,L]
+
+# Handle 404 errors
+ErrorDocument 404 /index.html
