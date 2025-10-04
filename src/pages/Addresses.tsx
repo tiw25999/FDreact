@@ -90,7 +90,7 @@ export default function Addresses() {
     
     // If we're removing the default address, set the first remaining address as default
     if (user?.defaultAddressIndex === index) {
-      newDefaultIndex = list.length > 0 ? 0 : undefined;
+      newDefaultIndex = list.length > 0 ? 0 : 0;
     } else if (user?.defaultAddressIndex !== undefined && user.defaultAddressIndex > index) {
       // Adjust default index if we removed an address before the default
       newDefaultIndex = user.defaultAddressIndex - 1;

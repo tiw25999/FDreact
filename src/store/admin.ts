@@ -76,6 +76,24 @@ type AdminState = {
   fetchOrders: () => Promise<void>;
   fetchUsers: () => Promise<void>;
   updateOrderStatus: (orderId: string, status: string) => Promise<void>;
+  deleteOrder: (orderId: string) => Promise<void>;
+  createUser: (userData: {
+    first_name: string;
+    last_name: string;
+    email: string;
+    phone?: string;
+    password: string;
+    role: string;
+  }) => Promise<AdminUser>;
+  updateUser: (userId: string, userData: {
+    first_name: string;
+    last_name: string;
+    email: string;
+    phone?: string;
+    role: string;
+  }) => Promise<AdminUser>;
+  deleteUser: (userId: string) => Promise<void>;
+  deleteProduct: (productId: string) => Promise<void>;
 };
 
 export const useAdminStore = create<AdminState>((set, get) => ({

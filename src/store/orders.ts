@@ -23,7 +23,7 @@ export type Order = {
     shipping: number;
     grandTotal: number;
 	createdAt: string;
-    status: 'Pending' | 'Paid' | 'Shipped' | 'Completed';
+    status: 'Pending' | 'Paid' | 'Shipped' | 'Completed' | 'Cancelled';
     address: Address;
     payment: PaymentMethod;
 };

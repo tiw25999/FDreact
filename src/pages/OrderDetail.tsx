@@ -49,7 +49,7 @@ export default function OrderDetail() {
                 foundOrder = adminOrders.find(o => o.id === String(id));
             }
             
-            setOrder(foundOrder || null);
+            setOrder(foundOrder as any || null);
             setLoading(false);
         };
         
@@ -118,7 +118,7 @@ export default function OrderDetail() {
                         </tr>
                     </thead>
                     <tbody>
-                        {order.items.map((it, index) => (
+                        {order.items.map((it: any, index: number) => (
                             <tr key={it.id || `item-${index}`} className="border-t">
                                 <td className="p-2 flex items-center gap-3">
                                     <img 

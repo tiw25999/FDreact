@@ -36,7 +36,7 @@ type ProductsState = {
 	setQuery: (q: string) => void;
 	fetchProducts: () => Promise<void>;
 	addProduct: (p: AddProductPayload) => Promise<void>;
-	updateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
+	updateProduct: (id: string, updates: Partial<Product>) => Promise<any>;
 	removeProduct: (id: string) => Promise<void>;
 	reloadProducts: () => void;
 	filters: { category?: string; brand?: string; min?: number; max?: number; sort?: 'new'|'low'|'high'|'best' };
@@ -45,6 +45,7 @@ type ProductsState = {
 	brands: string[];
 	getCategories: () => string[];
 	getBrands: () => string[];
+	getCategoriesForDisplay: () => Array<{ value: string; label: string }>;
 	getFilteredProducts: () => Product[];
 	cache: {
 		products: Product[];
@@ -108,16 +109,16 @@ export const useProducts = create<ProductsState>((set, get) => ({
 				}));
 			
 			// Update cache
-			set({ 
+			set(state => ({ 
+				...state,
 				products: transformedProducts, 
 				loading: false,
 				cache: {
+					...state.cache,
 					products: transformedProducts,
-					categories: cache.categories,
-					brands: cache.brands,
 					lastFetch: now
 				}
-			});
+			}));
 		} catch (error) {
 			console.error('Failed to fetch products:', error);
 			set({ error: 'Failed to fetch products', loading: false });
@@ -306,6 +307,14 @@ export const useProducts = create<ProductsState>((set, get) => ({
 	reloadProducts: () => {
 		// Refetch products from API instead of using dummy data
 		get().fetchProducts();
+	},
+
+	getCategoriesForDisplay: () => {
+		const { categories } = get();
+		return categories.map(cat => ({
+			value: cat,
+			label: translateCategory(cat)
+		}));
 	},
 }));
 

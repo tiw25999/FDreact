@@ -30,8 +30,8 @@ export default function ProductsAdmin() {
 	});
 	const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 	const [successMessage, setSuccessMessage] = useState('');
-	const [selectedProduct, setSelectedProduct] = useState(null);
-	const [editingProduct, setEditingProduct] = useState(null);
+	const [selectedProduct, setSelectedProduct] = useState<any>(null);
+	const [editingProduct, setEditingProduct] = useState<any>(null);
 
 	// Fetch products when component mounts
 	useEffect(() => {

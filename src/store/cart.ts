@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { Product } from './products';
 import apiClient from '../utils/apiClient';
 
-export type CartItem = { product: Product; quantity: number };
+export type CartItem = { id?: string; product: Product; quantity: number };
 
 type CartState = {
 	items: CartItem[];
