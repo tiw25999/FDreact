@@ -20,7 +20,23 @@ app.use(express.static(distPath));
 app.get('*', (req, res) => {
   const indexPath = path.join(distPath, 'index.html');
   console.log('🔍 Looking for index.html at:', indexPath);
-  res.sendFile(indexPath);
+  
+  // Check if file exists before sending
+  try {
+    res.sendFile(indexPath);
+  } catch (error) {
+    console.error('❌ Error serving index.html:', error.message);
+    res.status(500).send(`
+      <html>
+        <head><title>Build Error</title></head>
+        <body>
+          <h1>Build Error</h1>
+          <p>index.html not found at: ${indexPath}</p>
+          <p>Please check if the build completed successfully.</p>
+        </body>
+      </html>
+    `);
+  }
 });
 
 app.listen(PORT, () => {
