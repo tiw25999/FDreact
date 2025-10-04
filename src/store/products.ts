@@ -129,18 +129,6 @@ export const useProducts = create<ProductsState>((set, get) => ({
 		const uniqueCategories = [...new Set(products.map(p => p.category))];
 		return [...new Set([...categories, ...uniqueCategories])];
 	},
-	getCategoriesForDisplay: () => {
-		const products = Array.isArray(get().products) ? get().products : [];
-		const uniqueCategories = [...new Set(products.map(p => p.category))];
-		const allCategories = [...new Set([...categories, ...uniqueCategories])];
-		return [
-			{ value: '', label: 'All Categories' },
-			...allCategories.map(c => ({
-				value: c,
-				label: translateCategory(c)
-			}))
-		];
-	},
 	getBrands: () => {
 		const products = Array.isArray(get().products) ? get().products : [];
 		const uniqueBrands = [...new Set(products.map(p => p.brand))];

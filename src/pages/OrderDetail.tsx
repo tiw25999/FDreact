@@ -41,7 +41,7 @@ export default function OrderDetail() {
             setLoading(true);
             
             // First check current user's orders
-            let foundOrder = currentUserOrders.find(o => o.id === String(id));
+            let foundOrder: any = currentUserOrders.find(o => o.id === String(id));
             
             // If not found and user is admin, fetch admin orders
             if (!foundOrder && user?.role === 'admin') {
@@ -49,7 +49,7 @@ export default function OrderDetail() {
                 foundOrder = adminOrders.find(o => o.id === String(id));
             }
             
-            setOrder(foundOrder as any);
+            setOrder(foundOrder);
             setLoading(false);
         };
         
