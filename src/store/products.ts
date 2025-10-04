@@ -243,15 +243,19 @@ export const useProducts = create<ProductsState>((set, get) => ({
 				price: response.data.price,
 				image: response.data.image_url,
 				description: response.data.description,
-				category: category,
-				brand: brand,
+				category: category || 'Unknown',
+				brand: brand || 'Unknown',
 				rating: response.data.rating || 0,
 				isNew: response.data.is_new || false,
 				isSale: response.data.is_sale || false,
 				stockQuantity: response.data.stock_quantity
 			};
 			
-			set(state => ({ products: [transformedProduct, ...state.products], loading: false }));
+			set(state => ({ 
+				...state,
+				products: [transformedProduct, ...state.products], 
+				loading: false 
+			}));
 			
 			// Refresh categories and brands after adding new ones
 			await get().fetchProducts();
@@ -282,6 +286,7 @@ export const useProducts = create<ProductsState>((set, get) => ({
 			};
 			
 			set(state => ({
+				...state,
 				products: state.products.map(p => p.id === id ? transformedProduct : p),
 				loading: false
 			}));
@@ -297,6 +302,7 @@ export const useProducts = create<ProductsState>((set, get) => ({
 		try {
 			await apiClient.delete(`/admin/products/${id}`);
 			set(state => ({
+				...state,
 				products: state.products.filter(p => p.id !== id),
 				loading: false
 			}));

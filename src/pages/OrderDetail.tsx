@@ -49,7 +49,7 @@ export default function OrderDetail() {
                 foundOrder = adminOrders.find(o => o.id === String(id));
             }
             
-            setOrder(foundOrder as any || null);
+            setOrder(foundOrder as any);
             setLoading(false);
         };
         
